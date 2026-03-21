@@ -59,6 +59,20 @@ KNOWN_PTM = {
     "HYP":"Hydroxyproline","MLY":"N6-methyl-Lys","MSE":"Selenomethionine",
     "CSO":"S-hydroxy-Cys","KCX":"Carbamylated-Lys","OCS":"Cys-sulfinic acid",
 }
+# Known modified nucleosides (DNA/RNA); NOT counted in protein chain
+KNOWN_NA_MOD = {
+    "8OG": "8-oxoguanosine (oxidized G)",
+    "PSU": "Pseudouridine",
+    "M2G": "N2-methylguanosine",
+    "M7G": "7-methylguanosine",
+    "OMG": "O2'-methylguanosine",
+    "5MU": "5-methyluridine (ribothymidine)",
+    "OMA": "O2'-methyladenosine",
+    "OMC": "O2'-methylcytidine",
+    "OMU": "O2'-methyluridine",
+    "1MA": "1-methyladenosine",
+    "5MC": "5-methylcytidine",
+}
 
 # ── Force field tables ─────────────────────────────────────────────────────
 FF_PROTEIN = {
@@ -71,9 +85,16 @@ FF_DNA = {
     "charmm36_na": {"label": "CHARMM36 NA", "eco": "charmm", "files": ["charmm36/na.xml"]},
     "amber_ol15":  {"label": "AMBER OL15",  "eco": "amber",  "files": ["amber14/DNA.OL15.xml"]},
 }
+_8OG_RNA_STR = PROJECT_ROOT / "app" / "ff_custom" / "toppar_8OG_RNA.str"
 FF_RNA = {
     "charmm36_na": {"label": "CHARMM36 NA", "eco": "charmm", "files": ["charmm36/na.xml"]},
     "amber_ol3":   {"label": "AMBER OL3",   "eco": "amber",  "files": ["amber14/RNA.OL3.xml"]},
+    **({"charmm36_8og": {
+        "label": "CHARMM36 NA + 8-oxoG (RNA)",
+        "eco":   "charmm",
+        "files": ["charmm36/na.xml"],
+        "extra_str": [str(_8OG_RNA_STR)],
+    }} if _8OG_RNA_STR.exists() else {}),
 }
 FF_WATER = {
     "charmm": {"label": "TIP3P (CHARMM)", "files": ["charmm36/water.xml"]},
@@ -93,12 +114,13 @@ def find_pdbs() -> list[str]:
 
 
 def _res_type(name: str) -> str:
-    if name in STANDARD_AA:  return "protein"
-    if name in DNA_RES:      return "dna"
-    if name in RNA_RES:      return "rna"
-    if name in KNOWN_PTM:    return "ptm"
-    if name in WATER:        return "water"
-    if name in IONS:         return "ion"
+    if name in STANDARD_AA:   return "protein"
+    if name in KNOWN_NA_MOD:  return "ptm"      # modified nucleoside → orange marker
+    if name in DNA_RES:       return "dna"
+    if name in RNA_RES:       return "rna"
+    if name in KNOWN_PTM:     return "ptm"
+    if name in WATER:         return "water"
+    if name in IONS:          return "ion"
     return "unknown"
 
 
@@ -142,6 +164,7 @@ def classify_components(pdb_path: Path) -> dict:
         "dna":     {"chains": [], "n_residues": 0},
         "rna":     {"chains": [], "n_residues": 0},
         "ptm":     {"items": [], "n_residues": 0},
+        "na_mod":  {"items": [], "n_residues": 0},
         "water":   {"n_molecules": 0},
         "ions":    {"counts": {}, "n_total": 0},
         "unknown": {"items": [], "n_residues": 0},
@@ -156,6 +179,13 @@ def classify_components(pdb_path: Path) -> dict:
             n = r.name.strip()
             if n in STANDARD_AA:
                 chain_protein += 1
+            elif n in KNOWN_NA_MOD:
+                # Modified nucleoside: record separately, don't force into protein chain;
+                # chain type will be inferred from the surrounding regular residues.
+                comp["na_mod"]["items"].append(
+                    {"chain": chain.id, "resnum": r.id, "name": n, "desc": KNOWN_NA_MOD[n]}
+                )
+                comp["na_mod"]["n_residues"] += 1
             elif n in DNA_RES:
                 chain_dna += 1
             elif n in RNA_RES:
@@ -170,7 +200,7 @@ def classify_components(pdb_path: Path) -> dict:
                     {"chain": chain.id, "resnum": r.id, "name": n, "desc": KNOWN_PTM[n]}
                 )
                 comp["ptm"]["n_residues"] += 1
-                chain_protein += 1  # PTMs live in protein chains
+                chain_protein += 1  # protein PTMs live in protein chains
             else:
                 comp["unknown"]["items"].append(
                     {"chain": chain.id, "resnum": r.id, "name": n}
