@@ -1,0 +1,57 @@
+# all_atom project environment
+# Install:  conda env create -f environment.yml
+# Update:   conda env update -f environment.yml --prune
+# Activate: conda activate allatom
+#
+# Note: openff-toolkit requires ambertools (Linux only).
+# On Linux server, run after activation:
+#   pip install openff-toolkit openff-forcefields
+
+name: allatom
+
+channels:
+  - conda-forge
+  - defaults
+
+dependencies:
+  - python=3.11
+
+  # MD engine (auto-detects CUDA GPU)
+  - openmm>=8.1
+
+  # Structure preparation
+  - pdbfixer
+  - parmed
+
+  # Trajectory analysis
+  - mdanalysis>=2.7
+  - mdtraj>=1.9
+
+  # Numerics
+  - numpy
+  - scipy
+  - pandas
+
+  # Visualization
+  - matplotlib
+  - nglview
+  - jupyterlab
+  - ipywidgets
+
+  # Remote transfer: Windows to Linux
+  - paramiko
+  - fabric
+
+  # Local web UI (structure preparation interface)
+  - flask
+
+  # Utilities
+  - tqdm
+  - rich
+  - pyyaml
+  - click
+
+  # Dev tools
+  - pytest
+  - black
+  - pip

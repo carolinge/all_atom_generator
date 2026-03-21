@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+
+# Conda / virtual envs
+.env
+.venv
+envs/
+
+# Generated simulation output
+output/
+prepared/
+uploaded/
+
+# Large data / scratch
+*.dcd
+*.xtc
+*.trr
+*.tpr
+*.log
+*.edr
+*.cpt
+test.txt
+
+# Editor
+.vscode/
+.idea/
+
+# Claude internal
+.claude/

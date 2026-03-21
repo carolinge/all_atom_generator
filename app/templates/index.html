@@ -1,0 +1,1043 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>all_atom — MD Setup</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg0:#0d0017; --bg1:#120820; --bg2:#1a0a2e; --bg3:#200d3a;
+      --border:#3b0764; --purple:#7c3aed; --purple-hi:#a855f7; --purple-lo:#4c1d95;
+      --accent:#c084fc; --text:#e0d0ff; --text-dim:#9a8ab0;
+      --ok:#4ade80; --warn:#facc15; --err:#f87171; --info:#93c5fd;
+      --radius:8px; --mono:'Cascadia Code','JetBrains Mono',Consolas,monospace;
+    }
+    body { background:var(--bg0); color:var(--text); font-family:var(--mono);
+           font-size:13px; min-height:100vh; display:flex; flex-direction:column; }
+
+    header { background:var(--bg2); border-bottom:1px solid var(--border);
+             padding:12px 24px; display:flex; align-items:center; gap:12px; flex-shrink:0; }
+    header h1 { font-size:14px; color:var(--accent); letter-spacing:.06em; }
+    header span { color:var(--text-dim); font-size:11px; }
+    .dot { width:8px; height:8px; border-radius:50%; background:var(--purple-hi);
+           box-shadow:0 0 8px var(--purple-hi); }
+
+    .wizard { flex:1; display:grid; grid-template-columns:520px 1fr; overflow:hidden; }
+    .steps-col { overflow-y:auto; display:flex; flex-direction:column; }
+    .log-col   { display:flex; flex-direction:column; border-left:1px solid var(--border); }
+
+    /* ── Step cards ── */
+    .step-card { border-bottom:1px solid var(--border); transition:opacity .25s; }
+    .step-card.locked { opacity:.28; pointer-events:none; }
+    .step-card.done  .step-hdr { border-left:3px solid var(--ok); }
+    .step-card.active .step-hdr { border-left:3px solid var(--purple-hi); }
+    .step-card.locked .step-hdr { border-left:3px solid transparent; }
+    .step-hdr { padding:13px 20px; display:flex; align-items:center; gap:12px;
+                background:var(--bg2); cursor:pointer; user-select:none; border-left:3px solid transparent; }
+    .step-num { width:26px; height:26px; border-radius:50%; display:flex;
+                align-items:center; justify-content:center; font-size:11px; font-weight:bold;
+                flex-shrink:0; background:var(--purple-lo); color:var(--accent); }
+    .step-card.done .step-num { background:var(--ok); color:#000; }
+    .step-title { font-size:12px; font-weight:bold; letter-spacing:.04em; flex:1; }
+    .step-status { font-size:10px; color:var(--text-dim); }
+    .chevron { color:var(--text-dim); font-size:10px; transition:transform .2s; }
+    .step-card.open .chevron { transform:rotate(180deg); }
+    .step-body { padding:20px; display:none; flex-direction:column; gap:14px; background:var(--bg1); }
+    .step-card.open .step-body { display:flex; }
+
+    /* ── Forms ── */
+    label { display:block; color:var(--text-dim); font-size:11px; margin-bottom:4px; }
+    select, input[type=number], input[type=text] {
+      width:100%; background:var(--bg0); border:1px solid var(--border);
+      color:var(--text); padding:7px 10px; border-radius:var(--radius);
+      font-family:var(--mono); font-size:12px; outline:none; transition:border-color .2s; }
+    select:focus, input:focus { border-color:var(--purple); }
+    select option { background:var(--bg0); }
+    .row2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+
+    /* ── Buttons ── */
+    .btn { display:flex; align-items:center; justify-content:center; gap:7px;
+           padding:9px 16px; border-radius:var(--radius); border:none;
+           font-family:var(--mono); font-size:12px; cursor:pointer; transition:all .2s;
+           letter-spacing:.04em; width:100%; }
+    .btn-primary { background:var(--purple); color:#fff; }
+    .btn-primary:hover:not(:disabled) { background:var(--purple-hi); }
+    .btn-primary:disabled { background:var(--bg3); color:var(--text-dim); cursor:not-allowed; }
+    .btn-secondary { background:var(--bg2); color:var(--text-dim); border:1px solid var(--border); }
+    .btn-secondary:hover:not(:disabled) { border-color:var(--purple); color:var(--text); }
+    .btn-ok { background:#15803d; color:#fff; }
+    .btn-ok:hover:not(:disabled) { background:#16a34a; }
+    .btn-ok:disabled { background:var(--bg3); color:var(--text-dim); cursor:not-allowed; }
+    .btn-sm { padding:5px 12px; font-size:11px; width:auto; }
+
+    /* ── Upload drop zone ── */
+    .drop-zone { border:2px dashed var(--border); border-radius:var(--radius);
+                 padding:28px 16px; text-align:center; cursor:pointer;
+                 transition:border-color .2s, background .2s; }
+    .drop-zone:hover, .drop-zone.dragover { border-color:var(--purple-hi); background:var(--bg3); }
+    .drop-zone p { color:var(--text-dim); font-size:11px; line-height:2; }
+    .drop-zone strong { color:var(--accent); }
+    #file-input { display:none; }
+
+    /* ── Badges ── */
+    .badges { display:flex; gap:6px; flex-wrap:wrap; }
+    .badge { font-size:10px; padding:2px 7px; border-radius:4px; border:1px solid var(--border);
+             background:var(--bg0); color:var(--text-dim); }
+    .badge.ok   { border-color:var(--ok);   color:var(--ok); }
+    .badge.warn { border-color:var(--warn); color:var(--warn); }
+    .badge.err  { border-color:var(--err);  color:var(--err); }
+    .badge.info { border-color:var(--info); color:var(--info); }
+
+    /* ── Section label ── */
+    .slabel { font-size:10px; text-transform:uppercase; letter-spacing:.12em;
+              color:var(--text-dim); padding-bottom:6px; border-bottom:1px solid var(--border);
+              margin-bottom:10px; }
+
+    /* ── Chain grid ── */
+    .chain-grid { display:flex; flex-direction:column; gap:6px; }
+    .chain-card { background:var(--bg0); border:1px solid var(--border); border-radius:var(--radius);
+                  padding:8px 12px; display:flex; align-items:center; gap:10px;
+                  cursor:pointer; transition:border-color .2s,background .2s; user-select:none; }
+    .chain-card:hover { border-color:var(--purple); }
+    .chain-card.selected { border-color:var(--purple-hi); background:var(--bg3); }
+    .chain-id { font-size:14px; font-weight:bold; color:var(--accent); width:20px; text-align:center; }
+    .chain-meta .cn { font-size:12px; }
+    .chain-meta .cr { font-size:10px; color:var(--text-dim); }
+
+    /* ── Sequence viewer ── */
+    .seq-chain { margin-bottom:14px; }
+    .seq-chain-label { font-size:10px; color:var(--text-dim); margin-bottom:4px;
+                       letter-spacing:.03em; }
+
+    .seq-track-wrap {
+      overflow-x:scroll; border:1px solid var(--border); border-radius:var(--radius);
+      background:var(--bg0); padding:5px 8px 3px; cursor:default;
+    }
+    .seq-track-wrap::-webkit-scrollbar { height:4px; }
+    .seq-track-wrap::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+    .seq-track-wrap::-webkit-scrollbar-track { background:var(--bg1); }
+
+    .seq-track { display:inline-flex; flex-direction:column; min-width:100%; }
+
+    /* Ruler */
+    .seq-ruler { display:flex; height:14px; margin-bottom:1px; }
+    .srt { /* ruler tick cell */
+      width:12px; flex-shrink:0; font-size:8px; font-family:var(--mono);
+      color:var(--text-dim); white-space:nowrap; overflow:visible;
+      line-height:1; position:relative; padding-top:2px;
+    }
+    .srt.n::before { /* tick line */
+      content:''; position:absolute; top:0; left:0;
+      width:1px; height:4px; background:var(--border);
+    }
+
+    /* Residue letters */
+    .seq-residues { display:flex; }
+    .sr {
+      width:12px; height:15px; font-size:9px; font-weight:bold;
+      font-family:var(--mono); display:inline-flex; align-items:center;
+      justify-content:center; cursor:pointer; flex-shrink:0;
+      user-select:none; transition:background .08s;
+      border-bottom:2px solid transparent;
+    }
+    .sr:hover  { background:var(--bg3) !important; border-radius:2px; }
+    .sr.prot   { color:#c084fc; border-bottom-color:#4c1d95; }
+    .sr.dna    { color:#93c5fd; border-bottom-color:#1d4ed8; }
+    .sr.rna    { color:#86efac; border-bottom-color:#15803d; }
+    .sr.ptm    { color:#fdba74; border-bottom-color:#9a3412; }
+    .sr.unk    { color:#f87171; border-bottom-color:#991b1b; }
+    .sr.sel    { background:#78350f !important; color:#fef3c7 !important;
+                 border-bottom-color:#f59e0b !important; border-radius:2px; }
+
+    /* ── Mutation panel (inline) ── */
+    .mut-inline { background:var(--bg3); border:1px solid var(--warn);
+                  border-radius:var(--radius); padding:10px 12px;
+                  display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .mut-inline span { color:var(--warn); font-size:11px; }
+    .mut-inline select { width:auto; padding:4px 8px; font-size:11px; }
+
+    /* ── Mutation queue ── */
+    .mut-list { display:flex; flex-direction:column; gap:4px; }
+    .mut-item { display:flex; align-items:center; gap:8px; padding:5px 10px;
+                background:var(--bg0); border:1px solid var(--purple-lo);
+                border-radius:var(--radius); font-size:11px; }
+    .mut-item span { flex:1; color:var(--accent); }
+    .mut-del { background:none; border:none; color:var(--err); cursor:pointer; font-size:13px; }
+
+    /* ── Sub panels (parallel) ── */
+    .twin-panels { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .sub-panel { background:var(--bg0); border:1px solid var(--border);
+                 border-radius:var(--radius); padding:12px; display:flex;
+                 flex-direction:column; gap:8px; }
+
+    /* ── Opts ── */
+    .opt-row { display:flex; align-items:center; justify-content:space-between;
+               padding:7px 10px; background:var(--bg2); border:1px solid var(--border);
+               border-radius:var(--radius); }
+    .opt-row label { margin:0; color:var(--text); font-size:11px; cursor:pointer; }
+    .opt-row input[type=checkbox] { accent-color:var(--purple-hi); width:14px; height:14px; cursor:pointer; }
+    .opt-indent { border-left:2px solid var(--purple-lo); }
+
+    /* ── Issue summary ── */
+    .issue-box { padding:8px 12px; border-radius:var(--radius); font-size:11px; line-height:1.8; }
+    .issue-box.ok   { background:#052e16; border:1px solid var(--ok);  color:var(--ok); }
+    .issue-box.warn { background:#1c1200; border:1px solid var(--warn); color:var(--warn); }
+
+    /* ── Component table ── */
+    .comp-table { border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; }
+    .comp-row { display:grid; grid-template-columns:130px 1fr auto; border-bottom:1px solid var(--border); align-items:center; }
+    .comp-row:last-child { border-bottom:none; }
+    .comp-row > * { padding:8px 10px; }
+    .comp-row.hdr { background:var(--bg2); font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.1em; }
+    .comp-type { color:var(--accent); font-size:11px; }
+    .comp-count { color:var(--text-dim); font-size:11px; }
+    .comp-row select { margin:0; padding:4px 7px; font-size:11px; }
+
+    /* ── Compat ── */
+    .compat { padding:9px 12px; border-radius:var(--radius); font-size:11px; display:flex; gap:8px; align-items:center; }
+    .compat.ok   { background:#052e16; border:1px solid var(--ok);  color:var(--ok); }
+    .compat.err  { background:#2d0707; border:1px solid var(--err); color:var(--err); }
+    .compat.idle { background:var(--bg0); border:1px solid var(--border); color:var(--text-dim); }
+
+    /* ── Engine tabs ── */
+    .eng-tabs { display:flex; border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; }
+    .eng-tab  { flex:1; padding:9px 14px; text-align:center; cursor:pointer;
+                font-size:12px; user-select:none; transition:all .2s; }
+
+    /* ── Log ── */
+    .log-hdr { background:var(--bg2); border-bottom:1px solid var(--border);
+               padding:11px 18px; display:flex; align-items:center; gap:10px; flex-shrink:0; }
+    .log-title { font-size:10px; text-transform:uppercase; letter-spacing:.12em; color:var(--text-dim); flex:1; }
+    .sdot { width:7px; height:7px; border-radius:50%; background:var(--text-dim); transition:background .3s; }
+    .sdot.running { background:var(--ok); box-shadow:0 0 6px var(--ok); animation:pulse 1s infinite; }
+    .sdot.done    { background:var(--ok); }
+    .sdot.error   { background:var(--err); }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+    #log { flex:1; overflow-y:auto; padding:14px 18px; font-size:11.5px;
+           line-height:1.75; white-space:pre-wrap; word-break:break-all; }
+    #log::-webkit-scrollbar { width:5px; }
+    #log::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+    .ll { display:flex; gap:8px; }
+    .lp { color:var(--text-dim); flex-shrink:0; }
+    .li { color:var(--info); } .lok { color:var(--ok); }
+    .lw { color:var(--warn); } .le  { color:var(--err); }
+    .ld { color:var(--accent); font-weight:bold; }
+    .log-sep { border-top:1px solid var(--border); margin:8px 0; opacity:.4; }
+
+    /* ── Skeleton ── */
+    .skel { height:40px; background:linear-gradient(90deg,var(--bg0) 25%,var(--bg2) 50%,var(--bg0) 75%);
+            background-size:200% 100%; animation:shimmer 1.2s infinite; border-radius:var(--radius); }
+    @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="dot"></div>
+  <h1>all_atom / MD Setup</h1>
+  <span>Structure Preparation &rarr; Force Field &rarr; File Generation</span>
+</header>
+
+<div class="wizard">
+
+<!-- ════ LEFT: Steps ════════════════════════════════════════════════════════ -->
+<div class="steps-col">
+
+  <!-- ── Step 1: Upload ── -->
+  <div class="step-card active open" id="card-1">
+    <div class="step-hdr" onclick="toggleCard(1)">
+      <div class="step-num" id="num-1">1</div>
+      <div class="step-title">Input Structure</div>
+      <div class="step-status" id="status-1">Upload .pdb or .cif</div>
+      <div class="chevron">▾</div>
+    </div>
+    <div class="step-body">
+
+      <div class="drop-zone" id="drop-zone"
+           onclick="document.getElementById('file-input').click()"
+           ondragover="onDragOver(event)" ondragleave="onDragLeave(event)"
+           ondrop="onDrop(event)">
+        <p><strong>Drop .pdb or .cif here</strong><br>or click to browse</p>
+        <p id="upload-name" style="color:var(--accent);margin-top:6px;display:none"></p>
+      </div>
+      <input type="file" id="file-input" accept=".pdb,.cif,.mmcif"
+             onchange="uploadFile(this.files[0])" />
+
+      <div id="s1-info" style="display:none">
+        <div class="badges" id="s1-badges"></div>
+      </div>
+
+      <button class="btn btn-primary" id="s1-next" disabled onclick="completeStep1()">
+        Next &rarr; Structure Preparation
+      </button>
+    </div>
+  </div>
+
+  <!-- ── Step 2: Preparation ── -->
+  <div class="step-card locked" id="card-2">
+    <div class="step-hdr" onclick="toggleCard(2)">
+      <div class="step-num" id="num-2">2</div>
+      <div class="step-title">Structure Preparation</div>
+      <div class="step-status" id="status-2">Locked</div>
+      <div class="chevron">▾</div>
+    </div>
+    <div class="step-body">
+
+      <!-- Chain selection -->
+      <div>
+        <div class="slabel">Chain Selection</div>
+        <div class="chain-grid" id="chain-grid"></div>
+        <div style="display:flex;gap:6px;margin-top:8px">
+          <button class="btn btn-secondary btn-sm" onclick="selectAll()">All</button>
+          <button class="btn btn-secondary btn-sm" onclick="selectNone()">None</button>
+        </div>
+      </div>
+
+      <!-- Sequence viewer -->
+      <div>
+        <div class="slabel">Sequence — click residue to mutate</div>
+        <div id="seq-viewer"></div>
+        <div class="mut-inline" id="mut-inline" style="display:none">
+          <span id="mut-inline-label"></span>
+          <span style="color:var(--text-dim)">→</span>
+          <select id="mut-target-sel" style="width:90px"></select>
+          <button class="btn btn-secondary btn-sm" onclick="queueMutation()">+ Add</button>
+          <button class="btn btn-secondary btn-sm" onclick="closeMutInline()">✕</button>
+        </div>
+      </div>
+
+      <!-- Twin panels: PDBFixer | Mutations -->
+      <div class="twin-panels">
+
+        <!-- PDBFixer panel -->
+        <div class="sub-panel">
+          <div class="slabel" style="margin-bottom:0">PDBFixer <span style="color:var(--text-dim);font-weight:normal">(optional)</span></div>
+          <div id="issue-box" class="issue-box ok">Checking structure...</div>
+          <div style="display:flex;flex-direction:column;gap:5px">
+            <div class="opt-row">
+              <label for="opt-miss-res">Missing residues</label>
+              <input type="checkbox" id="opt-miss-res" checked />
+            </div>
+            <div class="opt-row">
+              <label for="opt-miss-atoms">Missing heavy atoms</label>
+              <input type="checkbox" id="opt-miss-atoms" checked />
+            </div>
+            <div class="opt-row">
+              <label for="opt-het">Remove heterogens</label>
+              <input type="checkbox" id="opt-het" checked />
+            </div>
+            <div class="opt-row opt-indent">
+              <label for="opt-water">Keep cryst. water</label>
+              <input type="checkbox" id="opt-water" />
+            </div>
+            <div class="opt-row">
+              <label for="opt-h">Add hydrogens</label>
+              <input type="checkbox" id="opt-h" checked />
+            </div>
+            <div class="opt-row opt-indent" id="ph-row">
+              <label>pH</label>
+              <input type="number" id="opt-ph" value="7.0" min="0" max="14" step="0.1"
+                     style="width:70px" />
+            </div>
+          </div>
+          <button class="btn btn-secondary" id="s2-fix-btn" onclick="runPdbFixer()">
+            ▶ Run PDBFixer
+          </button>
+        </div>
+
+        <!-- Mutations panel -->
+        <div class="sub-panel">
+          <div class="slabel" style="margin-bottom:0">Mutations <span style="color:var(--text-dim);font-weight:normal">(optional)</span></div>
+          <div class="mut-list" id="mut-list">
+            <div style="color:var(--text-dim);font-size:11px">Click a residue in the sequence to add mutations.</div>
+          </div>
+          <button class="btn btn-secondary" id="s2-mut-btn" disabled onclick="runMutations()">
+            ▶ Run Mutations
+          </button>
+        </div>
+
+      </div><!-- /twin-panels -->
+
+      <button class="btn btn-ok" id="s2-next" onclick="completeStep2()">
+        Next &rarr; Force Field Selection
+      </button>
+    </div>
+  </div>
+
+  <!-- ── Step 3: Force Field ── -->
+  <div class="step-card locked" id="card-3">
+    <div class="step-hdr" onclick="toggleCard(3)">
+      <div class="step-num" id="num-3">3</div>
+      <div class="step-title">Force Field Selection</div>
+      <div class="step-status" id="status-3">Locked</div>
+      <div class="chevron">▾</div>
+    </div>
+    <div class="step-body">
+      <div>
+        <div class="slabel">Detected Components</div>
+        <div class="comp-table" id="comp-table">
+          <div class="comp-row hdr"><div>Component</div><div>Info</div><div>Force Field</div></div>
+        </div>
+      </div>
+      <div>
+        <div class="slabel">Solvation</div>
+        <div class="row2">
+          <div>
+            <label>Box padding (nm)</label>
+            <input type="number" id="box-pad" value="1.0" min="0.5" max="3.0" step="0.1" />
+          </div>
+          <div>
+            <label>Ionic strength (M)</label>
+            <input type="number" id="box-ionic" value="0.15" min="0" max="1.0" step="0.01" />
+          </div>
+        </div>
+        <div class="row2" style="margin-top:8px">
+          <div>
+            <label>Positive ion</label>
+            <select id="box-pos"><option value="Na+">Na+</option><option value="K+">K+</option></select>
+          </div>
+          <div>
+            <label>Negative ion</label>
+            <select id="box-neg"><option value="Cl-">Cl-</option></select>
+          </div>
+        </div>
+      </div>
+      <div class="compat idle" id="compat-box">○ &nbsp;Select force fields, then check compatibility</div>
+      <button class="btn btn-secondary" onclick="checkCompat()">⟳ Check Compatibility</button>
+      <button class="btn btn-ok" id="s3-next" disabled onclick="completeStep3()">
+        Next &rarr; Generate Files
+      </button>
+    </div>
+  </div>
+
+  <!-- ── Step 4: Generate ── -->
+  <div class="step-card locked" id="card-4">
+    <div class="step-hdr" onclick="toggleCard(4)">
+      <div class="step-num" id="num-4">4</div>
+      <div class="step-title">Generate &amp; Download</div>
+      <div class="step-status" id="status-4">Locked</div>
+      <div class="chevron">▾</div>
+    </div>
+    <div class="step-body">
+      <div>
+        <div class="slabel">Simulation Engine</div>
+        <div class="eng-tabs">
+          <div class="eng-tab" id="tab-omm" onclick="selectEngine('openmm')"
+               style="background:var(--purple);color:#fff">OpenMM</div>
+          <div class="eng-tab" id="tab-gmx" onclick="selectEngine('gromacs')"
+               style="background:var(--bg0);color:var(--text-dim);border-left:1px solid var(--border)">GROMACS</div>
+        </div>
+      </div>
+      <div id="engine-desc" style="font-size:11px;color:var(--text-dim);line-height:1.9"></div>
+      <button class="btn btn-primary" id="s4-gen" onclick="generateFiles()">▶ Generate Files</button>
+      <button class="btn btn-ok"      id="s4-dl"  disabled onclick="downloadFiles()">↓ Download md_files.zip</button>
+    </div>
+  </div>
+
+</div><!-- /steps-col -->
+
+<!-- ════ RIGHT: Log ══════════════════════════════════════════════════════════ -->
+<div class="log-col">
+  <div class="log-hdr">
+    <div class="sdot" id="sdot"></div>
+    <span class="log-title">Output Log</span>
+  </div>
+  <div id="log">
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;
+                height:100%;gap:10px;color:var(--text-dim)">
+      <div style="font-size:28px;opacity:.3">⬡</div>
+      <div style="font-size:11px;text-align:center;max-width:220px;line-height:1.8">
+        Logs from each operation appear here and accumulate across steps.
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /wizard -->
+
+<script>
+// ══ State ══════════════════════════════════════════════════════════════
+const S = {
+  pdb: null,          // uploaded pdb rel path (original input)
+  info: null,         // analyze result
+  selectedChains: new Set(),
+  mutations: [],      // queued mutations
+  mutSelected: null,  // currently selected residue for mutation
+  preparedPdb: null,  // latest prepared PDB (after fixer or mutation)
+  ffChoices: {},
+  compatOk: false,
+}
+
+const AA3 = ["ALA","ARG","ASN","ASP","CYS","GLN","GLU","GLY","HIS",
+             "ILE","LEU","LYS","MET","PHE","PRO","SER","THR","TRP","TYR","VAL"]
+
+// 1-letter lookup
+const AA1 = {ALA:'A',ARG:'R',ASN:'N',ASP:'D',CYS:'C',GLN:'Q',GLU:'E',GLY:'G',
+             HIS:'H',HSD:'H',HSE:'H',HSP:'H',ILE:'I',LEU:'L',LYS:'K',MET:'M',
+             PHE:'F',PRO:'P',SER:'S',THR:'T',TRP:'W',TYR:'Y',VAL:'V'}
+const NUC1 = {A:'A',C:'C',G:'G',U:'U',DA:'A',DC:'C',DG:'G',DT:'T',
+              RA:'A',RC:'C',RG:'G',RU:'U'}
+
+// ══ Card ═══════════════════════════════════════════════════════════════
+function toggleCard(n) {
+  const c = document.getElementById(`card-${n}`)
+  if (c.classList.contains('locked')) return
+  c.classList.toggle('open')
+}
+function setCardState(n, state) {
+  const c = document.getElementById(`card-${n}`)
+  c.classList.remove('active','done','locked')
+  c.classList.add(state)
+  if (state === 'active') c.classList.add('open')
+}
+
+// ══ Init ═══════════════════════════════════════════════════════════════
+function init() {
+  const sel = document.getElementById('mut-target-sel')
+  AA3.forEach(aa => sel.appendChild(new Option(aa, aa)))
+  document.getElementById('opt-h').addEventListener('change', e => {
+    document.getElementById('ph-row').style.opacity = e.target.checked ? '1' : '.3'
+    document.getElementById('opt-ph').disabled = !e.target.checked
+  })
+}
+
+// ══ Upload / drag-drop ═════════════════════════════════════════════════
+function onDragOver(e) { e.preventDefault(); e.currentTarget.classList.add('dragover') }
+function onDragLeave(e) { e.currentTarget.classList.remove('dragover') }
+function onDrop(e) {
+  e.preventDefault(); e.currentTarget.classList.remove('dragover')
+  const file = e.dataTransfer.files[0]
+  if (file) uploadFile(file)
+}
+
+async function uploadFile(file) {
+  if (!file) return
+  const ext = file.name.split('.').pop().toLowerCase()
+  if (!['pdb','cif','mmcif'].includes(ext)) {
+    log('Only .pdb or .cif files accepted', 'error'); return
+  }
+  document.getElementById('upload-name').textContent = `Uploading ${file.name}...`
+  document.getElementById('upload-name').style.display = 'block'
+  document.getElementById('s1-next').disabled = true
+  logSep()
+  log(`Uploading ${file.name} ...`, 'info')
+
+  const fd = new FormData()
+  fd.append('file', file)
+  try {
+    const res  = await fetch('/api/upload', { method:'POST', body: fd })
+    const data = await res.json()
+    if (!res.ok) { log(data.error, 'error'); return }
+    if (data.converted_from) log(`Converted CIF → PDB: ${data.path}`, 'ok')
+    S.pdb = data.path
+    document.getElementById('upload-name').textContent = file.name
+    log(`Analyzing structure...`, 'info')
+    await analyzeAndRender(data.path)
+  } catch(e) {
+    log('Upload error: ' + e.message, 'error')
+    document.getElementById('upload-name').style.display = 'none'
+  }
+}
+
+async function analyzeAndRender(pdbRel) {
+  try {
+    const res  = await fetch('/api/analyze', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ pdb: pdbRel })
+    })
+    const data = await res.json()
+    if (!res.ok) { log(data.error || 'Analysis failed', 'error'); return }
+    S.info = data
+    renderS1Badges()
+    document.getElementById('s1-next').disabled = false
+    document.getElementById('status-1').textContent = pdbRel.split(/[\\/]/).pop()
+    log(`Structure OK: ${data.total_atoms.toLocaleString()} atoms, ${data.chains.length} chain(s)`, 'ok')
+    if (data.n_missing_residues) log(`  ${data.n_missing_residues} missing residue(s)`, 'warn')
+    if (data.n_missing_atoms)    log(`  ${data.n_missing_atoms} missing heavy atom(s)`, 'warn')
+  } catch(e) {
+    log('Analysis error: ' + e.message, 'error')
+  }
+}
+
+function renderS1Badges() {
+  const i = S.info
+  document.getElementById('s1-badges').innerHTML = `
+    <span class="badge">${i.total_atoms.toLocaleString()} atoms</span>
+    <span class="badge ${i.chains.length > 1 ? 'info' : ''}">${i.chains.length} chain(s)</span>
+    <span class="badge ${i.n_missing_residues > 0 ? 'warn' : 'ok'}">${i.n_missing_residues} missing res</span>
+    <span class="badge ${i.n_missing_atoms > 0 ? 'warn' : 'ok'}">${i.n_missing_atoms} missing atoms</span>`
+  document.getElementById('s1-info').style.display = 'block'
+}
+
+function completeStep1() {
+  setCardState(1, 'done')
+  document.getElementById('num-1').textContent = '✓'
+  setCardState(2, 'active')
+  document.getElementById('status-2').textContent = 'Optional prep — or go straight to Next'
+  renderChains()
+  renderSeq()
+  updateIssueBox()
+}
+
+// ══ Step 2 — Chains ════════════════════════════════════════════════════
+function renderChains() {
+  if (!S.info) return
+  const grid = document.getElementById('chain-grid')
+  grid.innerHTML = ''
+  S.selectedChains = new Set(S.info.chains.map(c => c.id))
+  S.info.chains.forEach(c => {
+    const div = document.createElement('div')
+    div.className = 'chain-card selected'
+    div.dataset.id = c.id
+    div.onclick = () => toggleChain(c.id)
+    div.innerHTML = `
+      <input type="checkbox" style="accent-color:var(--purple-hi);width:14px;height:14px" checked
+             onchange="event.stopPropagation();toggleChain('${c.id}')" />
+      <div class="chain-id">${c.id}</div>
+      <div class="chain-meta">
+        <div class="cn">${c.n_residues} residues</div>
+        <div class="cr">${c.first_res} → ${c.last_res}</div>
+      </div>`
+    grid.appendChild(div)
+  })
+}
+function toggleChain(id) {
+  S.selectedChains.has(id) ? S.selectedChains.delete(id) : S.selectedChains.add(id)
+  document.querySelectorAll('.chain-card').forEach(c => {
+    const s = S.selectedChains.has(c.dataset.id)
+    c.classList.toggle('selected', s)
+    c.querySelector('input[type=checkbox]').checked = s
+  })
+}
+function selectAll()  { S.info.chains.forEach(c => S.selectedChains.add(c.id)); syncChainUI() }
+function selectNone() { S.selectedChains.clear(); syncChainUI() }
+function syncChainUI() {
+  document.querySelectorAll('.chain-card').forEach(c => {
+    const s = S.selectedChains.has(c.dataset.id)
+    c.classList.toggle('selected', s)
+    c.querySelector('input[type=checkbox]').checked = s
+  })
+}
+
+// ══ Step 2 — Sequence viewer ═══════════════════════════════════════════
+function renderSeq() {
+  if (!S.info) return
+  const viewer = document.getElementById('seq-viewer')
+  viewer.innerHTML = ''
+  S.info.chains.forEach(chain => {
+    const wrap = document.createElement('div')
+    wrap.className = 'seq-chain'
+
+    const header = document.createElement('div')
+    header.className = 'seq-chain-label'
+    const first = chain.residues[0], last = chain.residues[chain.residues.length - 1]
+    header.textContent = `Chain ${chain.id}  ·  ${chain.n_residues} residues  ·  ${chain.first_res} ${first?.seqnum ?? ''} → ${chain.last_res} ${last?.seqnum ?? ''}`
+
+    const trackWrap = document.createElement('div')
+    trackWrap.className = 'seq-track-wrap'
+
+    const track = document.createElement('div')
+    track.className = 'seq-track'
+
+    const ruler = document.createElement('div')
+    ruler.className = 'seq-ruler'
+
+    const resRow = document.createElement('div')
+    resRow.className = 'seq-residues'
+
+    chain.residues.forEach((r, idx) => {
+      // Ruler tick
+      const tick = document.createElement('div')
+      tick.className = 'srt'
+      if (idx === 0 || idx % 10 === 0) {
+        tick.textContent = r.seqnum
+        tick.classList.add('n')
+      }
+      ruler.appendChild(tick)
+
+      // Residue letter
+      const letter = AA1[r.name] || NUC1[r.name] || r.name[0]
+      const tc = {protein:'prot', dna:'dna', rna:'rna', ptm:'ptm', unknown:'unk'}[r.type] || 'prot'
+      const el = document.createElement('div')
+      el.className = `sr ${tc}`
+      el.textContent = letter
+      el.title = `${r.name} ${r.seqnum} (Chain ${chain.id})`
+      el.dataset.chain  = chain.id
+      el.dataset.seqnum = r.seqnum
+      el.dataset.name   = r.name
+      el.onclick = () => selectForMut(el, chain.id, r.seqnum, r.name)
+      resRow.appendChild(el)
+    })
+
+    track.appendChild(ruler)
+    track.appendChild(resRow)
+    trackWrap.appendChild(track)
+    wrap.appendChild(header)
+    wrap.appendChild(trackWrap)
+    viewer.appendChild(wrap)
+  })
+}
+
+function selectForMut(el, chain, seqnum, name) {
+  // Deselect previous
+  document.querySelectorAll('.sr.sel').forEach(e => e.classList.remove('sel'))
+  if (S.mutSelected && S.mutSelected.el === el) {
+    // Clicking same residue again → deselect
+    S.mutSelected = null
+    document.getElementById('mut-inline').style.display = 'none'
+    return
+  }
+  el.classList.add('sel')
+  S.mutSelected = { el, chain, seqnum, name }
+  const panel = document.getElementById('mut-inline')
+  document.getElementById('mut-inline-label').textContent =
+    `${name} ${seqnum}  (Chain ${chain})`
+  // Set default target to first AA that differs
+  const sel = document.getElementById('mut-target-sel')
+  sel.value = AA3.find(a => a !== name) || 'ALA'
+  panel.style.display = 'flex'
+}
+
+function closeMutInline() {
+  document.querySelectorAll('.sr.sel').forEach(e => e.classList.remove('sel'))
+  S.mutSelected = null
+  document.getElementById('mut-inline').style.display = 'none'
+}
+
+function queueMutation() {
+  if (!S.mutSelected) return
+  const { chain, seqnum, name } = S.mutSelected
+  const toRes = document.getElementById('mut-target-sel').value
+  if (toRes === name) { log('Source and target residue are the same', 'warn'); return }
+  S.mutations.push({ chain, resnum: seqnum, from_res: name, to_res: toRes })
+  renderMutList()
+  closeMutInline()
+  document.getElementById('s2-mut-btn').disabled = false
+}
+
+function removeMutation(i) {
+  S.mutations.splice(i, 1)
+  renderMutList()
+  document.getElementById('s2-mut-btn').disabled = S.mutations.length === 0
+}
+
+function renderMutList() {
+  const list = document.getElementById('mut-list')
+  if (S.mutations.length === 0) {
+    list.innerHTML = '<div style="color:var(--text-dim);font-size:11px">Click a residue in the sequence to add mutations.</div>'
+    return
+  }
+  list.innerHTML = ''
+  S.mutations.forEach((m, i) => {
+    const div = document.createElement('div')
+    div.className = 'mut-item'
+    div.innerHTML = `<span>${m.chain}: ${m.from_res}${m.resnum} → ${m.to_res}</span>
+                     <button class="mut-del" onclick="removeMutation(${i})">✕</button>`
+    list.appendChild(div)
+  })
+}
+
+function updateIssueBox() {
+  if (!S.info) return
+  const box = document.getElementById('issue-box')
+  const mr  = S.info.n_missing_residues
+  const ma  = S.info.n_missing_atoms
+  if (mr === 0 && ma === 0) {
+    box.className = 'issue-box ok'
+    box.textContent = '✓ No missing residues or heavy atoms detected'
+  } else {
+    box.className = 'issue-box warn'
+    box.innerHTML = `⚠ ${mr} missing residue(s) &nbsp;|&nbsp; ${ma} missing atom(s)<br>
+                     <span style="font-size:10px;opacity:.8">PDBFixer recommended</span>`
+  }
+}
+
+// ══ Step 2 — PDBFixer ══════════════════════════════════════════════════
+async function runPdbFixer() {
+  if (S.selectedChains.size === 0) { log('Select at least one chain', 'warn'); return }
+  const options = {
+    add_missing_residues: document.getElementById('opt-miss-res').checked,
+    add_missing_atoms:    document.getElementById('opt-miss-atoms').checked,
+    remove_heterogens:    document.getElementById('opt-het').checked,
+    keep_water:           document.getElementById('opt-water').checked,
+    add_hydrogens:        document.getElementById('opt-h').checked,
+    ph:                   parseFloat(document.getElementById('opt-ph').value),
+  }
+  const btn = document.getElementById('s2-fix-btn')
+  btn.disabled = true; btn.textContent = '⏳ Running...'
+  logSep(); setDot('running')
+
+  const startRes = await fetch('/api/run_pdbfixer', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ pdb: S.pdb, chains: [...S.selectedChains], options, mutations: [] })
+  })
+  const startData = await startRes.json()
+  if (!startRes.ok) {
+    log(startData.error, 'error'); setDot('error')
+    btn.disabled = false; btn.textContent = '▶ Run PDBFixer'; return
+  }
+
+  streamLog(() => {
+    S.preparedPdb = startData.output
+    btn.disabled = false; btn.textContent = '▶ Run PDBFixer'; setDot('done')
+  }, () => { btn.disabled = false; btn.textContent = '▶ Run PDBFixer'; setDot('error') })
+}
+
+// ══ Step 2 — Mutations ═════════════════════════════════════════════════
+async function runMutations() {
+  if (S.mutations.length === 0) { log('No mutations queued', 'warn'); return }
+  const btn = document.getElementById('s2-mut-btn')
+  btn.disabled = true; btn.textContent = '⏳ Running...'
+  logSep(); setDot('running')
+
+  const pdbToUse = S.preparedPdb || S.pdb
+  const startRes = await fetch('/api/run_mutations', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ pdb: pdbToUse, mutations: S.mutations })
+  })
+  const startData = await startRes.json()
+  if (!startRes.ok) {
+    log(startData.error, 'error'); setDot('error')
+    btn.disabled = false; btn.textContent = '▶ Run Mutations'; return
+  }
+
+  streamLog(() => {
+    S.preparedPdb = startData.output
+    btn.disabled = false; btn.textContent = '▶ Run Mutations'; setDot('done')
+  }, () => { btn.disabled = false; btn.textContent = '▶ Run Mutations'; setDot('error') })
+}
+
+function completeStep2() {
+  setCardState(2, 'done')
+  document.getElementById('num-2').textContent = '✓'
+  setCardState(3, 'active')
+  document.getElementById('status-3').textContent = 'Classify and select FF'
+  classifyAndRender()
+}
+
+// ══ Step 3 ══════════════════════════════════════════════════════════════
+async function classifyAndRender() {
+  // Try prepared PDB first, fall back to original
+  for (const pdb of [S.preparedPdb, S.pdb].filter(Boolean)) {
+    logSep()
+    log(`Classifying components in ${pdb.split(/[\\/]/).pop()} ...`, 'info')
+    try {
+      const res  = await fetch('/api/classify', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ pdb })
+      })
+      const data = await res.json()
+      if (res.status === 404) {
+        log(`File not found, trying original PDB...`, 'warn'); continue
+      }
+      if (!res.ok) { log(data.error, 'error'); return }
+      S.components = data.components
+      S.ffOptions  = data.ff_options
+      renderCompTable()
+      log(`Classification done (using ${pdb.split(/[\\/]/).pop()})`, 'ok')
+      return
+    } catch(e) { log('Error: ' + e.message, 'error'); return }
+  }
+  log('No valid structure found for classification', 'error')
+}
+
+function renderCompTable() {
+  const comp = S.components, opts = S.ffOptions
+  const table = document.getElementById('comp-table')
+  table.innerHTML = `<div class="comp-row hdr"><div>Component</div><div>Info</div><div>Force Field</div></div>`
+
+  function addRow(label, info, ffKey, options) {
+    if (!options) return
+    const row = document.createElement('div')
+    row.className = 'comp-row'
+    const selOpts = Object.entries(options).map(([k,v]) => `<option value="${k}">${v}</option>`).join('')
+    row.innerHTML = `<div class="comp-type">${label}</div>
+                     <div class="comp-count">${info}</div>
+                     <div><select id="ff-${ffKey}" onchange="onFfChange('${ffKey}',this.value)"
+                          style="min-width:140px">${selOpts}</select></div>`
+    table.appendChild(row)
+    S.ffChoices[ffKey] = Object.keys(options)[0]
+  }
+  function addInfoRow(label, info) {
+    const row = document.createElement('div')
+    row.className = 'comp-row'
+    row.innerHTML = `<div class="comp-type">${label}</div>
+                     <div class="comp-count">${info}</div>
+                     <div style="color:var(--text-dim);font-size:10px;padding:8px 10px">follows protein FF</div>`
+    table.appendChild(row)
+  }
+
+  const c = comp
+  if (c.protein.n_residues > 0)
+    addRow('Protein', `chains ${c.protein.chains.join(',')} · ${c.protein.n_residues} res`, 'protein', opts.protein)
+  if (c.dna.n_residues > 0)
+    addRow('DNA', `chains ${c.dna.chains.join(',')} · ${c.dna.n_residues} res`, 'dna', opts.dna)
+  if (c.rna.n_residues > 0)
+    addRow('RNA', `chains ${c.rna.chains.join(',')} · ${c.rna.n_residues} res`, 'rna', opts.rna)
+  if (c.ptm.n_residues > 0)
+    addInfoRow('PTMs', c.ptm.items.map(p=>`${p.name}${p.resnum}`).join(', '))
+  if (c.water.n_molecules > 0)
+    addInfoRow('Water', `${c.water.n_molecules} cryst. molecules`)
+  if (c.ions.n_total > 0)
+    addInfoRow('Ions', Object.entries(c.ions.counts).map(([k,v])=>`${v}×${k}`).join(', '))
+  if (c.unknown.n_residues > 0) {
+    const row = document.createElement('div')
+    row.className = 'comp-row'
+    row.innerHTML = `<div class="comp-type" style="color:var(--warn)">Unknown</div>
+                     <div class="comp-count" style="color:var(--warn)">
+                       ${[...new Set(c.unknown.items.map(u=>u.name))].join(', ')} — ligand parameterization not supported yet
+                     </div><div></div>`
+    table.appendChild(row)
+  }
+}
+
+function onFfChange(key, val) {
+  S.ffChoices[key] = val
+  const box = document.getElementById('compat-box')
+  box.className = 'compat idle'
+  box.textContent = '○  Changed — re-check compatibility'
+  document.getElementById('s3-next').disabled = true
+  S.compatOk = false
+}
+
+async function checkCompat() {
+  const res  = await fetch('/api/check_ff', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(S.ffChoices)
+  })
+  const data = await res.json()
+  const box  = document.getElementById('compat-box')
+  if (data.ok) {
+    box.className = 'compat ok'
+    box.innerHTML = '✓ &nbsp;Compatible — ready to generate'
+    document.getElementById('s3-next').disabled = false
+    S.compatOk = true
+  } else {
+    box.className = 'compat err'
+    box.innerHTML = '✕ &nbsp;' + data.errors.join('<br>')
+    document.getElementById('s3-next').disabled = true
+    S.compatOk = false
+  }
+}
+
+function completeStep3() {
+  setCardState(3, 'done')
+  document.getElementById('num-3').textContent = '✓'
+  setCardState(4, 'active')
+  document.getElementById('status-4').textContent = 'Ready to generate'
+  selectEngine('openmm')
+}
+
+// ══ Step 4 ══════════════════════════════════════════════════════════════
+const ENGINE_DESC = {
+  openmm: `Output: <span style="color:var(--accent)">run_openmm.py</span> + prepared PDB + README<br>
+    <span style="color:var(--ok)">Fast</span> — no system build now; solvation happens when script runs on server.<br>
+    <span style="color:var(--warn)">Small molecule ligands not supported yet.</span>`,
+  gromacs: `Output: <span style="color:var(--accent)">system.gro + topol.top + em/nvt/npt/md.mdp</span> + README<br>
+    <span style="color:var(--warn)">Slow (30-120 s)</span> — builds full solvated system now via ParmEd.<br>
+    Validate topol.top with <code>gmx grompp</code> before production runs.`
+}
+
+function selectEngine(eng) {
+  document.getElementById('engine-val') ?
+    document.getElementById('engine-val').value = eng : null
+  if (!document.getElementById('engine-val')) {
+    const h = document.createElement('input')
+    h.type = 'hidden'; h.id = 'engine-val'; h.value = eng
+    document.getElementById('card-4').appendChild(h)
+  }
+  document.getElementById('engine-val').value = eng
+  document.getElementById('engine-desc').innerHTML = ENGINE_DESC[eng]
+  const omm = document.getElementById('tab-omm'), gmx = document.getElementById('tab-gmx')
+  if (eng === 'openmm') {
+    omm.style.cssText += 'background:var(--purple);color:#fff'
+    gmx.style.cssText += 'background:var(--bg0);color:var(--text-dim)'
+  } else {
+    gmx.style.cssText += 'background:var(--purple);color:#fff'
+    omm.style.cssText += 'background:var(--bg0);color:var(--text-dim)'
+  }
+  document.getElementById('s4-dl').disabled = true
+}
+
+async function generateFiles() {
+  const pdb    = S.preparedPdb || S.pdb
+  const engine = document.getElementById('engine-val')?.value || 'openmm'
+  const box = {
+    padding:        parseFloat(document.getElementById('box-pad').value),
+    ionic_strength: parseFloat(document.getElementById('box-ionic').value),
+    pos_ion:        document.getElementById('box-pos').value,
+    neg_ion:        document.getElementById('box-neg').value,
+  }
+  const btn = document.getElementById('s4-gen')
+  btn.disabled = true
+  btn.textContent = engine === 'gromacs' ? '⏳ Building system...' : '⏳ Generating...'
+  logSep(); setDot('running')
+
+  const startRes = await fetch('/api/generate', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ pdb, ff_choices: S.ffChoices, box, engine })
+  })
+  if (!startRes.ok) {
+    const e = await startRes.json()
+    log(e.error, 'error'); setDot('error')
+    btn.disabled = false; btn.textContent = '▶ Generate Files'; return
+  }
+
+  streamLog(() => {
+    btn.disabled = false; btn.textContent = '▶ Regenerate'
+    document.getElementById('s4-dl').disabled = false
+    document.getElementById('status-4').textContent = 'Files ready'
+    setDot('done')
+  }, () => {
+    btn.disabled = false; btn.textContent = '▶ Generate Files'; setDot('error')
+  })
+}
+
+function downloadFiles() { window.location.href = '/api/download' }
+
+// ══ Log ════════════════════════════════════════════════════════════════
+function streamLog(onDone, onError) {
+  let hadError = false
+  const es = new EventSource('/api/log_stream')
+  es.onmessage = e => {
+    const d = JSON.parse(e.data)
+    if (d.level === 'ping') return
+    if (d.level === 'done') { es.close(); hadError ? onError() : onDone(); return }
+    if (d.level === 'error') hadError = true
+    log(d.msg, d.level)
+  }
+  es.onerror = () => { es.close(); onError() }
+}
+
+function log(msg, level = 'info') {
+  const el = document.getElementById('log')
+  // Remove welcome placeholder on first real message
+  const placeholder = el.querySelector('div[style]')
+  if (placeholder) el.innerHTML = ''
+  const line = document.createElement('div')
+  line.className = 'll'
+  const now = new Date().toLocaleTimeString('en', { hour12:false })
+  const cls = {info:'li',ok:'lok',warn:'lw',error:'le',done:'ld'}[level] || 'li'
+  line.innerHTML = `<span class="lp">[${now}]</span><span class="${cls}">${esc(msg)}</span>`
+  el.appendChild(line)
+  el.scrollTop = el.scrollHeight
+}
+
+function logSep() {
+  const el = document.getElementById('log')
+  const placeholder = el.querySelector('div[style]')
+  if (placeholder) return
+  const sep = document.createElement('div')
+  sep.className = 'log-sep'
+  el.appendChild(sep)
+  el.scrollTop = el.scrollHeight
+}
+
+function setDot(s) { document.getElementById('sdot').className = `sdot ${s}` }
+function esc(s)    { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') }
+
+document.addEventListener('DOMContentLoaded', init)
+</script>
+</body>
+</html>
