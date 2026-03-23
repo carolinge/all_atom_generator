@@ -1,0 +1,331 @@
+<ForceField>
+  <!--
+    CHARMM36 / AMBER ff14SB + OL3 parameters for RNA 8-oxoguanosine (8OG)
+    =========================================================================
+    Residue name:  8OG  (PDB convention for 8-oxoguanosine in RNA)
+    Variants:      8OG (internal), 8OG5 (5'-terminal), 8OG3 (3'-terminal)
+
+    Load this file TOGETHER with amber14/RNA.OL3.xml and amber14/tip3p.xml.
+
+    Charge source: Derived by analogy from Aduri et al., J. Chem. Theory
+      Comput. 2007, 3, 1464-1475 (AMBER modified RNA nucleoside parameters).
+      Backbone/sugar charges are identical to guanosine (G) in RNA.OL3.xml.
+      Base atoms near the 8-oxo modification (C8, O8, N7, H7) are estimated
+      from RESP charge redistribution principles; the remaining base atoms
+      retain exact G values.
+
+    Net residue charge: -1.0 (phosphate form, same as G).
+
+    Atomic changes vs. G:
+      Removed:  H8  (aromatic CH on C8 in guanine)
+      Changed:  C8  RNA-CP → RNA-C   (sp2 aromatic → sp2 carbonyl C)
+                N7  RNA-NB → RNA-NA  (aromatic N → sp2 N-H)
+      Added:    O8  RNA-O             (C8=O8 carbonyl oxygen)
+                H7  RNA-H             (N7-H proton)
+
+    VALIDATION: Run scripts/validate_8OG_ff.py before production use.
+    RECOMMENDATION: Replace approximate charges with QM RESP values
+      (antechamber on Linux server) once the pipeline is established.
+  -->
+
+  <!-- No new AtomTypes needed: RNA-C, RNA-O, RNA-NA, RNA-H, RNA-CB, RNA-N*
+       are all defined in amber14/RNA.OL3.xml -->
+
+  <Residues>
+
+    <!-- ── Internal residue (phosphodiester backbone, 2 external bonds) ── -->
+    <Residue name="8OG">
+      <!-- Backbone: identical to G in RNA.OL3.xml -->
+      <Atom charge="1.1662"   name="P"    type="RNA-P"/>
+      <Atom charge="-0.776"   name="OP1"  type="RNA-O2"/>
+      <Atom charge="-0.776"   name="OP2"  type="RNA-O2"/>
+      <Atom charge="-0.4989"  name="O5'"  type="RNA-OS"/>
+      <Atom charge="0.0558"   name="C5'"  type="RNA-CI"/>
+      <Atom charge="0.0679"   name="H5'"  type="RNA-H1"/>
+      <Atom charge="0.0679"   name="H5''" type="RNA-H1"/>
+      <Atom charge="0.1065"   name="C4'"  type="RNA-CT"/>
+      <Atom charge="0.1174"   name="H4'"  type="RNA-H1"/>
+      <Atom charge="-0.3548"  name="O4'"  type="RNA-OS"/>
+      <Atom charge="0.0191"   name="C1'"  type="RNA-CT"/>
+      <Atom charge="0.2006"   name="H1'"  type="RNA-H2"/>
+      <!-- Sugar: identical to G -->
+      <Atom charge="0.2022"   name="C3'"  type="RNA-CT"/>
+      <Atom charge="0.0615"   name="H3'"  type="RNA-H1"/>
+      <Atom charge="0.067"    name="C2'"  type="RNA-CT"/>
+      <Atom charge="0.0972"   name="H2'"  type="RNA-H1"/>
+      <Atom charge="-0.6139"  name="O2'"  type="RNA-OH"/>
+      <Atom charge="0.4186"   name="HO2'" type="RNA-HO"/>
+      <Atom charge="-0.5246"  name="O3'"  type="RNA-OS"/>
+      <!-- Base: glycosidic N unchanged -->
+      <Atom charge="0.0492"   name="N9"   type="RNA-N*"/>
+      <!-- C8=O8 modification: C8 becomes carbonyl C, O8 is new -->
+      <Atom charge="0.4000"   name="C8"   type="RNA-C"/>
+      <Atom charge="-0.5600"  name="O8"   type="RNA-O"/>
+      <!-- N7 becomes N-H; H7 is the new proton -->
+      <Atom charge="-0.4600"  name="N7"   type="RNA-NA"/>
+      <Atom charge="0.3500"   name="H7"   type="RNA-H"/>
+      <!-- 6-membered ring: identical to G -->
+      <Atom charge="0.1744"   name="C5"   type="RNA-CB"/>
+      <Atom charge="0.477"    name="C6"   type="RNA-C"/>
+      <Atom charge="-0.5597"  name="O6"   type="RNA-O"/>
+      <Atom charge="-0.4787"  name="N1"   type="RNA-NA"/>
+      <Atom charge="0.3424"   name="H1"   type="RNA-H"/>
+      <Atom charge="0.7657"   name="C2"   type="RNA-CA"/>
+      <Atom charge="-0.9672"  name="N2"   type="RNA-N2"/>
+      <Atom charge="0.4364"   name="H21"  type="RNA-H"/>
+      <Atom charge="0.4364"   name="H22"  type="RNA-H"/>
+      <Atom charge="-0.6323"  name="N3"   type="RNA-NC"/>
+      <Atom charge="0.1222"   name="C4"   type="RNA-CB"/>
+      <!-- Bonds: backbone -->
+      <Bond atomName1="P"    atomName2="OP1"/>
+      <Bond atomName1="P"    atomName2="OP2"/>
+      <Bond atomName1="P"    atomName2="O5'"/>
+      <Bond atomName1="O5'"  atomName2="C5'"/>
+      <Bond atomName1="C5'"  atomName2="H5'"/>
+      <Bond atomName1="C5'"  atomName2="H5''"/>
+      <Bond atomName1="C5'"  atomName2="C4'"/>
+      <Bond atomName1="C4'"  atomName2="H4'"/>
+      <Bond atomName1="C4'"  atomName2="O4'"/>
+      <Bond atomName1="C4'"  atomName2="C3'"/>
+      <Bond atomName1="O4'"  atomName2="C1'"/>
+      <Bond atomName1="C1'"  atomName2="H1'"/>
+      <Bond atomName1="C1'"  atomName2="N9"/>
+      <Bond atomName1="C1'"  atomName2="C2'"/>
+      <Bond atomName1="C3'"  atomName2="H3'"/>
+      <Bond atomName1="C3'"  atomName2="C2'"/>
+      <Bond atomName1="C3'"  atomName2="O3'"/>
+      <Bond atomName1="C2'"  atomName2="H2'"/>
+      <Bond atomName1="C2'"  atomName2="O2'"/>
+      <Bond atomName1="O2'"  atomName2="HO2'"/>
+      <!-- Bonds: base (8OG-specific) -->
+      <Bond atomName1="N9"   atomName2="C8"/>
+      <Bond atomName1="N9"   atomName2="C4"/>
+      <Bond atomName1="C8"   atomName2="O8"/>
+      <Bond atomName1="C8"   atomName2="N7"/>
+      <Bond atomName1="N7"   atomName2="H7"/>
+      <Bond atomName1="N7"   atomName2="C5"/>
+      <Bond atomName1="C5"   atomName2="C6"/>
+      <Bond atomName1="C5"   atomName2="C4"/>
+      <Bond atomName1="C6"   atomName2="O6"/>
+      <Bond atomName1="C6"   atomName2="N1"/>
+      <Bond atomName1="N1"   atomName2="H1"/>
+      <Bond atomName1="N1"   atomName2="C2"/>
+      <Bond atomName1="C2"   atomName2="N2"/>
+      <Bond atomName1="C2"   atomName2="N3"/>
+      <Bond atomName1="N2"   atomName2="H21"/>
+      <Bond atomName1="N2"   atomName2="H22"/>
+      <Bond atomName1="N3"   atomName2="C4"/>
+      <ExternalBond atomName="P"/>
+      <ExternalBond atomName="O3'"/>
+    </Residue>
+
+    <!-- ── 3'-terminal (O3' has HO3', ExternalBond on P only) ── -->
+    <Residue name="8OG3">
+      <Atom charge="1.1662"   name="P"    type="RNA-P"/>
+      <Atom charge="-0.776"   name="OP1"  type="RNA-O2"/>
+      <Atom charge="-0.776"   name="OP2"  type="RNA-O2"/>
+      <Atom charge="-0.4989"  name="O5'"  type="RNA-OS"/>
+      <Atom charge="0.0558"   name="C5'"  type="RNA-CI"/>
+      <Atom charge="0.0679"   name="H5'"  type="RNA-H1"/>
+      <Atom charge="0.0679"   name="H5''" type="RNA-H1"/>
+      <Atom charge="0.1065"   name="C4'"  type="RNA-CT"/>
+      <Atom charge="0.1174"   name="H4'"  type="RNA-H1"/>
+      <Atom charge="-0.3548"  name="O4'"  type="RNA-OS"/>
+      <Atom charge="0.0191"   name="C1'"  type="RNA-CT"/>
+      <Atom charge="0.2006"   name="H1'"  type="RNA-H2"/>
+      <Atom charge="0.2022"   name="C3'"  type="RNA-CT"/>
+      <Atom charge="0.0615"   name="H3'"  type="RNA-H1"/>
+      <Atom charge="0.067"    name="C2'"  type="RNA-CT"/>
+      <Atom charge="0.0972"   name="H2'"  type="RNA-H1"/>
+      <Atom charge="-0.6139"  name="O2'"  type="RNA-OH"/>
+      <Atom charge="0.4186"   name="HO2'" type="RNA-HO"/>
+      <Atom charge="-0.6541"  name="O3'"  type="RNA-OH"/>
+      <Atom charge="0.4376"   name="HO3'" type="RNA-HO"/>
+      <Atom charge="0.0492"   name="N9"   type="RNA-N*"/>
+      <Atom charge="0.4000"   name="C8"   type="RNA-C"/>
+      <Atom charge="-0.5600"  name="O8"   type="RNA-O"/>
+      <Atom charge="-0.4600"  name="N7"   type="RNA-NA"/>
+      <Atom charge="0.3500"   name="H7"   type="RNA-H"/>
+      <Atom charge="0.1744"   name="C5"   type="RNA-CB"/>
+      <Atom charge="0.477"    name="C6"   type="RNA-C"/>
+      <Atom charge="-0.5597"  name="O6"   type="RNA-O"/>
+      <Atom charge="-0.4787"  name="N1"   type="RNA-NA"/>
+      <Atom charge="0.3424"   name="H1"   type="RNA-H"/>
+      <Atom charge="0.7657"   name="C2"   type="RNA-CA"/>
+      <Atom charge="-0.9672"  name="N2"   type="RNA-N2"/>
+      <Atom charge="0.4364"   name="H21"  type="RNA-H"/>
+      <Atom charge="0.4364"   name="H22"  type="RNA-H"/>
+      <Atom charge="-0.6323"  name="N3"   type="RNA-NC"/>
+      <Atom charge="0.1222"   name="C4"   type="RNA-CB"/>
+      <Bond atomName1="P"    atomName2="OP1"/>
+      <Bond atomName1="P"    atomName2="OP2"/>
+      <Bond atomName1="P"    atomName2="O5'"/>
+      <Bond atomName1="O5'"  atomName2="C5'"/>
+      <Bond atomName1="C5'"  atomName2="H5'"/>
+      <Bond atomName1="C5'"  atomName2="H5''"/>
+      <Bond atomName1="C5'"  atomName2="C4'"/>
+      <Bond atomName1="C4'"  atomName2="H4'"/>
+      <Bond atomName1="C4'"  atomName2="O4'"/>
+      <Bond atomName1="C4'"  atomName2="C3'"/>
+      <Bond atomName1="O4'"  atomName2="C1'"/>
+      <Bond atomName1="C1'"  atomName2="H1'"/>
+      <Bond atomName1="C1'"  atomName2="N9"/>
+      <Bond atomName1="C1'"  atomName2="C2'"/>
+      <Bond atomName1="C3'"  atomName2="H3'"/>
+      <Bond atomName1="C3'"  atomName2="C2'"/>
+      <Bond atomName1="C3'"  atomName2="O3'"/>
+      <Bond atomName1="O3'"  atomName2="HO3'"/>
+      <Bond atomName1="C2'"  atomName2="H2'"/>
+      <Bond atomName1="C2'"  atomName2="O2'"/>
+      <Bond atomName1="O2'"  atomName2="HO2'"/>
+      <Bond atomName1="N9"   atomName2="C8"/>
+      <Bond atomName1="N9"   atomName2="C4"/>
+      <Bond atomName1="C8"   atomName2="O8"/>
+      <Bond atomName1="C8"   atomName2="N7"/>
+      <Bond atomName1="N7"   atomName2="H7"/>
+      <Bond atomName1="N7"   atomName2="C5"/>
+      <Bond atomName1="C5"   atomName2="C6"/>
+      <Bond atomName1="C5"   atomName2="C4"/>
+      <Bond atomName1="C6"   atomName2="O6"/>
+      <Bond atomName1="C6"   atomName2="N1"/>
+      <Bond atomName1="N1"   atomName2="H1"/>
+      <Bond atomName1="N1"   atomName2="C2"/>
+      <Bond atomName1="C2"   atomName2="N2"/>
+      <Bond atomName1="C2"   atomName2="N3"/>
+      <Bond atomName1="N2"   atomName2="H21"/>
+      <Bond atomName1="N2"   atomName2="H22"/>
+      <Bond atomName1="N3"   atomName2="C4"/>
+      <ExternalBond atomName="P"/>
+    </Residue>
+
+    <!-- ── 5'-terminal (no phosphate, O5' has HO5', ExternalBond on O3') ── -->
+    <Residue name="8OG5">
+      <Atom charge="0.4295"   name="HO5'" type="RNA-HO"/>
+      <Atom charge="-0.6223"  name="O5'"  type="RNA-OH"/>
+      <Atom charge="0.0558"   name="C5'"  type="RNA-CI"/>
+      <Atom charge="0.0679"   name="H5'"  type="RNA-H1"/>
+      <Atom charge="0.0679"   name="H5''" type="RNA-H1"/>
+      <Atom charge="0.1065"   name="C4'"  type="RNA-CT"/>
+      <Atom charge="0.1174"   name="H4'"  type="RNA-H1"/>
+      <Atom charge="-0.3548"  name="O4'"  type="RNA-OS"/>
+      <Atom charge="0.0191"   name="C1'"  type="RNA-CT"/>
+      <Atom charge="0.2006"   name="H1'"  type="RNA-H2"/>
+      <Atom charge="0.2022"   name="C3'"  type="RNA-CT"/>
+      <Atom charge="0.0615"   name="H3'"  type="RNA-H1"/>
+      <Atom charge="0.067"    name="C2'"  type="RNA-CT"/>
+      <Atom charge="0.0972"   name="H2'"  type="RNA-H1"/>
+      <Atom charge="-0.6139"  name="O2'"  type="RNA-OH"/>
+      <Atom charge="0.4186"   name="HO2'" type="RNA-HO"/>
+      <Atom charge="-0.5246"  name="O3'"  type="RNA-OS"/>
+      <Atom charge="0.0492"   name="N9"   type="RNA-N*"/>
+      <Atom charge="0.4000"   name="C8"   type="RNA-C"/>
+      <Atom charge="-0.5600"  name="O8"   type="RNA-O"/>
+      <Atom charge="-0.4600"  name="N7"   type="RNA-NA"/>
+      <Atom charge="0.3500"   name="H7"   type="RNA-H"/>
+      <Atom charge="0.1744"   name="C5"   type="RNA-CB"/>
+      <Atom charge="0.477"    name="C6"   type="RNA-C"/>
+      <Atom charge="-0.5597"  name="O6"   type="RNA-O"/>
+      <Atom charge="-0.4787"  name="N1"   type="RNA-NA"/>
+      <Atom charge="0.3424"   name="H1"   type="RNA-H"/>
+      <Atom charge="0.7657"   name="C2"   type="RNA-CA"/>
+      <Atom charge="-0.9672"  name="N2"   type="RNA-N2"/>
+      <Atom charge="0.4364"   name="H21"  type="RNA-H"/>
+      <Atom charge="0.4364"   name="H22"  type="RNA-H"/>
+      <Atom charge="-0.6323"  name="N3"   type="RNA-NC"/>
+      <Atom charge="0.1222"   name="C4"   type="RNA-CB"/>
+      <Bond atomName1="HO5'" atomName2="O5'"/>
+      <Bond atomName1="O5'"  atomName2="C5'"/>
+      <Bond atomName1="C5'"  atomName2="H5'"/>
+      <Bond atomName1="C5'"  atomName2="H5''"/>
+      <Bond atomName1="C5'"  atomName2="C4'"/>
+      <Bond atomName1="C4'"  atomName2="H4'"/>
+      <Bond atomName1="C4'"  atomName2="O4'"/>
+      <Bond atomName1="C4'"  atomName2="C3'"/>
+      <Bond atomName1="O4'"  atomName2="C1'"/>
+      <Bond atomName1="C1'"  atomName2="H1'"/>
+      <Bond atomName1="C1'"  atomName2="N9"/>
+      <Bond atomName1="C1'"  atomName2="C2'"/>
+      <Bond atomName1="C3'"  atomName2="H3'"/>
+      <Bond atomName1="C3'"  atomName2="C2'"/>
+      <Bond atomName1="C3'"  atomName2="O3'"/>
+      <Bond atomName1="C2'"  atomName2="H2'"/>
+      <Bond atomName1="C2'"  atomName2="O2'"/>
+      <Bond atomName1="O2'"  atomName2="HO2'"/>
+      <Bond atomName1="N9"   atomName2="C8"/>
+      <Bond atomName1="N9"   atomName2="C4"/>
+      <Bond atomName1="C8"   atomName2="O8"/>
+      <Bond atomName1="C8"   atomName2="N7"/>
+      <Bond atomName1="N7"   atomName2="H7"/>
+      <Bond atomName1="N7"   atomName2="C5"/>
+      <Bond atomName1="C5"   atomName2="C6"/>
+      <Bond atomName1="C5"   atomName2="C4"/>
+      <Bond atomName1="C6"   atomName2="O6"/>
+      <Bond atomName1="C6"   atomName2="N1"/>
+      <Bond atomName1="N1"   atomName2="H1"/>
+      <Bond atomName1="N1"   atomName2="C2"/>
+      <Bond atomName1="C2"   atomName2="N2"/>
+      <Bond atomName1="C2"   atomName2="N3"/>
+      <Bond atomName1="N2"   atomName2="H21"/>
+      <Bond atomName1="N2"   atomName2="H22"/>
+      <Bond atomName1="N3"   atomName2="C4"/>
+      <ExternalBond atomName="O3'"/>
+    </Residue>
+
+  </Residues>
+
+  <!-- ── Supplemental force field parameters for 8OG ─────────────────────
+       All parameters below are for atom type pairs involving RNA-CB - RNA-NA
+       that do NOT exist in RNA.OL3.xml (because standard RNA has NB at N7,
+       not NA). All other 8OG bonds/angles/torsions reuse existing OL3 terms.
+  ─────────────────────────────────────────────────────────────────────────── -->
+
+  <HarmonicBondForce>
+    <!--
+      C5(RNA-CB) - N7(RNA-NA): new bond type.
+      Reference: RNA-CB - RNA-NB in OL3.xml: k=346435, r0=0.1391 nm.
+      NA has slightly shorter equilibrium length than NB (sp2 N-H vs aromatic N).
+      Value chosen consistent with AMBER99 CB-NA analogy.
+    -->
+    <Bond k="346435.2" length="0.1390" type1="RNA-CB" type2="RNA-NA"/>
+  </HarmonicBondForce>
+
+  <HarmonicAngleForce>
+    <!--
+      C5(CB) - N7(NA) - C8(C): angle at N7 in the 5-membered imidazole ring.
+      Reference: RNA-CB - RNA-NB - RNA-CP in OL3.xml: k=585.76, 1.8117 rad (103.8°).
+      In 8OG the ring geometry is similar (N7 still in imidazole ring).
+    -->
+    <Angle angle="1.8117" k="585.76" type1="RNA-CB" type2="RNA-NA" type3="RNA-C"/>
+
+    <!--
+      C5(CB) - N7(NA) - H7(H): exocyclic angle at N7.
+      Reference: analogous to RNA-C - RNA-NA - RNA-H in OL3 (k=418.40, 2.0385 rad).
+      For the 5-membered ring context the three angles at N7 must sum to ~360°:
+        C8-N7-C5 ≈ 103.8°, C8-N7-H7 ≈ 116.8° (from C-NA-H in OL3),
+        so C5-N7-H7 ≈ 360 - 103.8 - 116.8 = 139.4° = 2.433 rad.
+      This is geometrically correct for a planar sp2 N where H points away
+      from the ring. The planarity is additionally enforced by the improper
+      torsion RNA-NA - ... - RNA-H already in OL3.xml (line: Improper RNA-NA H).
+    -->
+    <Angle angle="2.433" k="418.40" type1="RNA-CB" type2="RNA-NA" type3="RNA-H"/>
+  </HarmonicAngleForce>
+
+  <PeriodicTorsionForce ordering="amber">
+    <!--
+      X - C5(CB) - N7(NA) - X: torsion around the C5-N7 bond.
+      Reference: X - RNA-CB - RNA-NB - X in OL3.xml: k=10.6692, per=2, phase=pi.
+      Same value used since the electronic character is similar.
+    -->
+    <Proper k1="10.6692" periodicity1="2" phase1="3.141592653589793"
+            type1="" type2="RNA-CB" type3="RNA-NA" type4=""/>
+
+    <!--
+      Improper for N9: maintains planarity of the glycosidic nitrogen.
+      In G (OL3.xml): <Improper type1="RNA-N*" type2="RNA-CB" type3="RNA-CP" type4="RNA-CT">
+      In 8OG: C8 changes from RNA-CP to RNA-C, so we need the updated term.
+    -->
+    <Improper k1="4.184" periodicity1="2" phase1="3.141592653589793"
+              type1="RNA-N*" type2="RNA-CB" type3="RNA-C" type4="RNA-CT"/>
+  </PeriodicTorsionForce>
+
+</ForceField>
