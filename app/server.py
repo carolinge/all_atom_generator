@@ -772,6 +772,83 @@ def _run_mutations_job(pdb_path: Path, mutations: list, out_path: Path):
         job_running = False
 
 
+def _run_ptm_job(pdb_path: Path, ptms: list, out_path: Path):
+    """Apply one or more PTMs sequentially, writing a single output PDB."""
+    global job_running
+    job_running = True
+    try:
+        from app.ptm_builder import apply_ptm, PATCHES
+        current_path = pdb_path
+        import tempfile, os
+
+        emit(f"Loading {pdb_path.name} ...")
+        tmp_files = []
+        for i, m in enumerate(ptms):
+            chain  = m["chain"]
+            resnum = m["resnum"]
+            code   = m["ptm_code"].upper()
+            if code not in PATCHES:
+                emit(f"  SKIP: unknown PTM code {code!r}", "warn")
+                continue
+            emit(f"  Applying {code} to chain {chain} res {resnum} ...")
+            try:
+                pdb_str = apply_ptm(current_path, chain, resnum, code)
+            except Exception as exc:
+                emit(f"  FAIL: {exc}", "error")
+                emit("DONE", "done")
+                return
+            # write to temp file for next iteration
+            tf = tempfile.NamedTemporaryFile(
+                mode="w", suffix=".pdb", delete=False, encoding="utf-8")
+            tf.write(pdb_str)
+            tf.flush()
+            tf.close()
+            tmp_files.append(tf.name)
+            current_path = Path(tf.name)
+            emit(f"    OK: chain {chain} {resnum} -> {code}", "ok")
+
+        # write final result
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        import shutil
+        shutil.copy(str(current_path), str(out_path))
+        for tf in tmp_files:
+            try:
+                os.unlink(tf)
+            except OSError:
+                pass
+
+        # count atoms for report
+        n_atoms = sum(1 for ln in out_path.read_text(encoding="utf-8").splitlines()
+                      if ln.startswith(("ATOM", "HETATM")))
+        emit(f"Saved -> {out_path.relative_to(PROJECT_ROOT)}  ({n_atoms:,} atoms)", "ok")
+        SESSION["prepared_path"] = str(out_path.relative_to(PROJECT_ROOT))
+        emit("DONE", "done")
+    except Exception:
+        emit(traceback.format_exc(), "error")
+        emit("DONE", "done")
+    finally:
+        job_running = False
+
+
+@app.route("/api/run_ptm", methods=["POST"])
+def api_run_ptm():
+    global job_running
+    if job_running:
+        return jsonify({"error": "A job is already running"}), 409
+    data     = request.json
+    pdb_path = PROJECT_ROOT / data["pdb"]
+    ptms     = data["ptms"]          # list of {chain, resnum, ptm_code}
+    out_path = PREPARED_DIR / f"{pdb_path.stem}_ptm.pdb"
+    clear_queue()
+    threading.Thread(
+        target=_run_ptm_job,
+        args=(pdb_path, ptms, out_path),
+        daemon=True,
+    ).start()
+    return jsonify({"status": "started",
+                    "output": str(out_path.relative_to(PROJECT_ROOT))})
+
+
 @app.route("/api/run_mutations", methods=["POST"])
 def api_run_mutations():
     global job_running
@@ -799,6 +876,14 @@ def api_classify():
     try:
         comp = classify_components(pdb_path)
         # Return FF options alongside
+        from app.ptm_builder import PATCHES as _PATCHES
+        ptm_labels = {
+            code: {
+                "label": f"{p.get('from','?')} -> {p['rename']}",
+                "from":  p.get("from", ""),
+            }
+            for code, p in _PATCHES.items()
+        }
         return jsonify({
             "components": comp,
             "ff_options": {
@@ -806,6 +891,7 @@ def api_classify():
                 "dna":     {k: v["label"] for k, v in FF_DNA.items()},
                 "rna":     {k: v["label"] for k, v in FF_RNA.items()},
             },
+            "ptm_options": ptm_labels,
         })
     except Exception:
         return jsonify({"error": traceback.format_exc()}), 500

@@ -157,12 +157,20 @@
     .mut-inline span { color:var(--warn); font-size:11px; }
     .mut-inline select { width:auto; padding:4px 8px; font-size:11px; }
 
-    /* ── Mutation queue ── */
+    /* ── Mode tabs (Mutate / PTM) ── */
+    .mode-tab { font-size:10px; padding:2px 8px; border-radius:99px;
+                background:var(--bg3); border:1px solid var(--border);
+                color:var(--text-dim); cursor:pointer; }
+    .mode-tab.active { background:var(--warn); border-color:var(--warn);
+                       color:#000; font-weight:600; }
+
+    /* ── Mutation / PTM queue ── */
     .mut-list { display:flex; flex-direction:column; gap:4px; }
     .mut-item { display:flex; align-items:center; gap:8px; padding:5px 10px;
                 background:var(--bg0); border:1px solid var(--purple-lo);
                 border-radius:var(--radius); font-size:11px; }
     .mut-item span { flex:1; color:var(--accent); }
+    .mut-item.ptm-item span { color:#fdba74; }
     .mut-del { background:none; border:none; color:var(--err); cursor:pointer; font-size:13px; }
 
     /* ── Sub panels (parallel) ── */
@@ -296,14 +304,20 @@
 
       <!-- Sequence viewer -->
       <div>
-        <div class="slabel">Sequence — click residue to mutate</div>
+        <div class="slabel">Sequence — click residue to mutate / modify</div>
         <div id="seq-viewer"></div>
-        <div class="mut-inline" id="mut-inline" style="display:none">
-          <span id="mut-inline-label"></span>
-          <span style="color:var(--text-dim)">→</span>
-          <select id="mut-target-sel" style="width:90px"></select>
-          <button class="btn btn-secondary btn-sm" onclick="queueMutation()">+ Add</button>
-          <button class="btn btn-secondary btn-sm" onclick="closeMutInline()">✕</button>
+        <div class="mut-inline" id="mut-inline" style="display:none;flex-direction:column;gap:4px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span id="mut-inline-label" style="font-weight:600"></span>
+            <span class="mode-tab active" id="tab-mut" onclick="setInlineMode('mut')">Mutate</span>
+            <span class="mode-tab" id="tab-ptm" onclick="setInlineMode('ptm')" style="display:none">Modify (PTM)</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="color:var(--text-dim)">→</span>
+            <select id="mut-target-sel" style="width:110px"></select>
+            <button class="btn btn-secondary btn-sm" id="mut-add-btn" onclick="queueMutation()">+ Add</button>
+            <button class="btn btn-secondary btn-sm" onclick="closeMutInline()">✕</button>
+          </div>
         </div>
       </div>
 
@@ -354,6 +368,17 @@
           </div>
           <button class="btn btn-secondary" id="s2-mut-btn" disabled onclick="runMutations()">
             ▶ Run Mutations
+          </button>
+        </div>
+
+        <!-- PTM panel -->
+        <div class="sub-panel">
+          <div class="slabel" style="margin-bottom:0">Modifications (PTM) <span style="color:var(--text-dim);font-weight:normal">(optional)</span></div>
+          <div class="mut-list" id="ptm-list">
+            <div style="color:var(--text-dim);font-size:11px">Click a modifiable residue (S/T/Y/G) to add PTMs.</div>
+          </div>
+          <button class="btn btn-secondary" id="s2-ptm-btn" disabled onclick="runPtm()">
+            ▶ Run Modifications
           </button>
         </div>
 
@@ -463,7 +488,10 @@ const S = {
   info: null,         // analyze result
   selectedChains: new Set(),
   mutations: [],      // queued mutations
-  mutSelected: null,  // currently selected residue for mutation
+  ptms: [],           // queued PTMs
+  mutSelected: null,  // currently selected residue for mutation/PTM
+  inlineMode: 'mut',  // 'mut' | 'ptm'
+  ptmOptions: {},     // {code: {label, from}} from server
   preparedPdb: null,  // latest prepared PDB (after fixer or mutation)
   ffChoices: {},
   compatOk: false,
@@ -682,26 +710,61 @@ function renderSeq() {
 }
 
 function selectForMut(el, chain, seqnum, name, type) {
-  // Deselect previous
   document.querySelectorAll('.sr.sel').forEach(e => e.classList.remove('sel'))
   if (S.mutSelected && S.mutSelected.el === el) {
-    // Clicking same residue again → deselect
     S.mutSelected = null
     document.getElementById('mut-inline').style.display = 'none'
     return
   }
   el.classList.add('sel')
   S.mutSelected = { el, chain, seqnum, name, type }
-  const panel = document.getElementById('mut-inline')
   document.getElementById('mut-inline-label').textContent =
     `${name} ${seqnum}  (Chain ${chain})`
-  // Populate dropdown based on residue type
+
+  // Show PTM tab only if applicable PTMs exist for this residue
+  const applicablePtms = Object.entries(S.ptmOptions)
+    .filter(([code, info]) => info.from === name ||
+      (name === 'G' && code === '8OG') ||
+      (name === 'RG' && code === '8OG') ||
+      (name === 'G5' && code === '8OG') ||
+      (name === 'G3' && code === '8OG'))
+  const tabPtm = document.getElementById('tab-ptm')
+  tabPtm.style.display = applicablePtms.length > 0 ? '' : 'none'
+
+  // Default to mutation mode (unless no mutation options)
+  setInlineMode('mut')
+  document.getElementById('mut-inline').style.display = ''
+}
+
+function setInlineMode(mode) {
+  S.inlineMode = mode
+  document.getElementById('tab-mut').classList.toggle('active', mode === 'mut')
+  document.getElementById('tab-ptm').classList.toggle('active', mode === 'ptm')
+  document.getElementById('mut-add-btn').onclick =
+    mode === 'mut' ? queueMutation : queuePtm
+
   const sel = document.getElementById('mut-target-sel')
   sel.innerHTML = ''
-  const opts = type === 'dna' ? DNA3 : type === 'rna' ? RNA3 : AA3
-  opts.forEach(r => sel.appendChild(new Option(r, r)))
-  sel.value = opts.find(r => r !== name) || opts[0]
-  panel.style.display = 'flex'
+  if (!S.mutSelected) return
+  const { name, type } = S.mutSelected
+
+  if (mode === 'ptm') {
+    // Show applicable PTMs
+    const applicable = Object.entries(S.ptmOptions).filter(([code, info]) =>
+      info.from === name ||
+      (['G','RG','G5','G3'].includes(name) && code === '8OG'))
+    if (applicable.length === 0) {
+      sel.appendChild(new Option('(none)', ''))
+    } else {
+      applicable.forEach(([code, info]) =>
+        sel.appendChild(new Option(`${code} (${info.label})`, code)))
+    }
+  } else {
+    // Mutation mode: standard residue list
+    const opts = type === 'dna' ? DNA3 : type === 'rna' ? RNA3 : AA3
+    opts.forEach(r => sel.appendChild(new Option(r, r)))
+    sel.value = opts.find(r => r !== name) || opts[0]
+  }
 }
 
 function closeMutInline() {
@@ -741,6 +804,62 @@ function renderMutList() {
                      <button class="mut-del" onclick="removeMutation(${i})">✕</button>`
     list.appendChild(div)
   })
+}
+
+// ── PTM queue ────────────────────────────────────────────────────────────────
+function queuePtm() {
+  if (!S.mutSelected) return
+  const { chain, seqnum, name } = S.mutSelected
+  const code = document.getElementById('mut-target-sel').value
+  if (!code) { log('No applicable PTM for this residue', 'warn'); return }
+  S.ptms.push({ chain, resnum: seqnum, from_res: name, ptm_code: code })
+  renderPtmList()
+  closeMutInline()
+  document.getElementById('s2-ptm-btn').disabled = false
+}
+
+function removePtm(i) {
+  S.ptms.splice(i, 1)
+  renderPtmList()
+  document.getElementById('s2-ptm-btn').disabled = S.ptms.length === 0
+}
+
+function renderPtmList() {
+  const list = document.getElementById('ptm-list')
+  if (S.ptms.length === 0) {
+    list.innerHTML = '<div style="color:var(--text-dim);font-size:11px">Click a modifiable residue (S/T/Y/G) to add PTMs.</div>'
+    return
+  }
+  list.innerHTML = ''
+  S.ptms.forEach((m, i) => {
+    const div = document.createElement('div')
+    div.className = 'mut-item ptm-item'
+    div.innerHTML = `<span>${m.chain}: ${m.from_res}${m.resnum} → ${m.ptm_code}</span>
+                     <button class="mut-del" onclick="removePtm(${i})">✕</button>`
+    list.appendChild(div)
+  })
+}
+
+async function runPtm() {
+  if (S.ptms.length === 0) { log('No PTMs queued', 'warn'); return }
+  const btn = document.getElementById('s2-ptm-btn')
+  btn.disabled = true; btn.textContent = '⏳ Running...'
+  logSep(); setDot('running')
+
+  const pdbToUse = S.preparedPdb || S.pdb
+  const res = await fetch('/api/run_ptm', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ pdb: pdbToUse, ptms: S.ptms })
+  })
+  const data = await res.json()
+  if (!res.ok) {
+    log(data.error, 'error'); setDot('error')
+    btn.disabled = false; btn.textContent = '▶ Run Modifications'; return
+  }
+  streamLog(() => {
+    S.preparedPdb = data.output
+    btn.disabled = false; btn.textContent = '▶ Run Modifications'; setDot('done')
+  }, () => { btn.disabled = false; btn.textContent = '▶ Run Modifications'; setDot('error') })
 }
 
 function updateIssueBox() {
@@ -839,6 +958,7 @@ async function classifyAndRender() {
       if (!res.ok) { log(data.error, 'error'); return }
       S.components = data.components
       S.ffOptions  = data.ff_options
+      S.ptmOptions = data.ptm_options || {}
       renderCompTable()
       log(`Classification done (using ${pdb.split(/[\\/]/).pop()})`, 'ok')
       return
