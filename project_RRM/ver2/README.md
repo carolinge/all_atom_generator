@@ -35,10 +35,20 @@ ver2/
 
 ## 当前进度
 
-- [ ] git clone modXNA → [`force_fields/modxna/`](force_fields/modxna/)
-- [ ] 验证 modXNA LICENSE
-- [ ] 检查 modXNA 实际覆盖（8OG / PSU / M1A / M6A 是否齐全）
-- [ ] 写 modxna mol2/frcmod → OpenMM XML 的转换脚本（用 ParmEd）
-- [ ] 移植 [`ptm_builder.py`](../../app/ptm_builder.py) 的 NeRF 逻辑到 [`pipeline/`](pipeline/)，扩展 PSU/M1A/M6A patches
-- [ ] 在 4BS2 上跑第一个 8OG replica 验证 modXNA pipeline
+- [x] git clone modXNA → [`force_fields/modxna/`](force_fields/modxna/)（commit `595cff1b`，GPL-3.0）
+- [x] 验证 LICENSE：GPL-3.0 ✅
+- [x] 检查 modXNA 实际覆盖 — 详见 [`results/inspect_modxna.md`](results/inspect_modxna.md)：
+  - **8OG** ✅ 标准
+  - **PUU** ✅ 标准 ψ（**不是 PSU** —— PSU 是设计衍生物）
+  - **M1A** ✅ 标准
+  - **m6A** ❌ modXNA 不含；外部使用 Bussi 2022
+- [x] **架构修正**：放弃 OpenMM XML 路线，改用 prmtop 路线（详见 [`docs/pipeline.md`](docs/pipeline.md)）
+- [x] 服务器端组装脚本骨架完成：
+  - [`pipeline/setup_modxna_server.sh`](pipeline/setup_modxna_server.sh)
+  - [`pipeline/build_modxna_residues.sh`](pipeline/build_modxna_residues.sh)
+  - [`pipeline/build_amber_system.sh`](pipeline/build_amber_system.sh)
+- [ ] **下一步**：在服务器上跑通 setup → build_modxna → 得到 8OGI.lib / PUUI.lib / M1AI.lib
+- [ ] 移植 NeRF 几何拼接到 `pipeline/`（注意 8OG.mol2 的 atom 6 `O6` 应重命名为 `O8`）
+- [ ] 写 `pipeline/run_md.py`（OpenMM 用 AmberPrmtopFile 读 prmtop）
+- [ ] 在 4BS2 上跑第一个 8OG replica 验证 pipeline
 - [ ] m1A / m6A free-RNA 验证（无蛋白）

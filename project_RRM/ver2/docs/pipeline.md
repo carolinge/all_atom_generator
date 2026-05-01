@@ -1,5 +1,8 @@
 # Pipeline：CIF → 修饰 RNA → 4BS2 复合物 MD
 
+> **架构关键决策**（2026-05-01）：放弃 OpenMM XML 转换路线，改为 **prmtop 路线**。
+> 原因：modXNA 的 base mol2 charges 是 fragment-level RESP，不能直接拼到 OL3 sugar+backbone（电荷不自洽）。modxna.sh + tleap 组装才得到正确电荷。OpenMM 的 `AmberPrmtopFile` 直接读 prmtop，根本不需要 OpenMM XML。
+
 ## 总流程图
 
 ```
@@ -7,18 +10,23 @@
    │
    ├─▶ PDBFixer ───────▶ structures/prepared/4BS2_clean.pdb
    │
-   ├─▶ ptm_builder ────▶ structures/modified/4BS2_8OG_at_G3.pdb
-   │   (NeRF 加 O8/H7)            structures/modified/4BS2_PSU_at_U2.pdb
+   ├─▶ NeRF 几何拼接 ──▶ structures/modified/4BS2_8OG_at_G3.pdb
+   │   (port from ptm_builder.py)
    │
-   └─▶ tleap (载入 modxna) ──▶ AMBER prmtop/inpcrd
-       或
-       parmed (mol2/frcmod → OpenMM XML) ──▶ run_openmm.py
-                  │
-                  ▼
-            生产 MD（OpenMM 8.x，HMR 4 fs，OPC 水）
-                  │
-                  ▼
-            轨迹分析（MDAnalysis/MDTraj）
+   │     ┌──── 服务器（Linux + AmberTools）────┐
+   │     ▼                                       │
+   ├─▶ build_modxna_residues.sh                  │
+   │   └─▶ 8OGI.lib, PUUI.lib, M1AI.lib  ◀─── 一次性，跨实验复用
+   │                                             │
+   ├─▶ build_amber_system.sh <pdb> <prefix>      │
+   │   └─▶ tleap → prmtop + inpcrd  ◀─── 每个体系一次
+   │     │
+   │     ▼ rsync 回 Windows
+   │
+   └─▶ OpenMM 用 AmberPrmtopFile 直接读取 ──▶ run_md.py → MD 轨迹
+                                                          │
+                                                          ▼
+                                                    分析（MDAnalysis）
 ```
 
 ## 详细步骤
@@ -37,21 +45,22 @@ git clone https://github.com/modxna/modxna
 - Sarzyńska/Lahiri 2022 SI（ψ 升级版）
 - Bussi `ff-m6a-fit5_AC.rtp`（m6A 升级版）
 
-### 2. mol2 + frcmod → OpenMM XML（待写）
+### 2. 在服务器上组装 modXNA 残基（一次性）
 
-`pipeline/convert_modxna_to_openmm.py`：
-
-```python
-import parmed as pmd
-# 加载 modxna 的 mol2 + frcmod
-mol = pmd.load_file('force_fields/modxna/dat/lib_base/8OG.mol2')
-mol.load_parameters('force_fields/modxna/dat/frcmod.modxna')
-# 写成 OpenMM-loadable XML
-ff_xml = pmd.openmm.OpenMMParameterSet.from_structure(mol)
-ff_xml.write('force_fields/openmm_xml/8OG_RNA.xml')
+```bash
+# 服务器登录后
+ssh bio.example
+cd ~/work/all_atom    # 假设仓库已经 rsync 过去
+bash project_RRM/ver2/pipeline/setup_modxna_server.sh    # 安装 ambertools
+bash project_RRM/ver2/pipeline/build_modxna_residues.sh  # 组装 .lib 文件
 ```
 
-（精确 API 待验证；备选用 `openmmforcefields.SystemGenerator` 的转换路径。）
+输出 `.lib` 文件到 `force_fields/openmm_xml/lib_amber/`：
+- `8OGI.lib`、`8OG3.lib`、`8OG5.lib`（internal / 3'-cap / 5'-cap）
+- `PUUI.lib`、`PUU3.lib`、`PUU5.lib`
+- `M1AI.lib`、`M1A3.lib`、`M1A5.lib`
+
+把这些 .lib 文件 rsync 回 Windows 即可一直用。
 
 ### 3. 结构准备
 
@@ -83,19 +92,31 @@ ver_2 需要新增的 patches：
 - `M1A` (A → m1A)：N1 加甲基（CH3 + 删 N1-H）
 - `M6A` (A → m6A)：N6 单 H 改成甲基
 
-### 5. 系统装配 + 运行
+### 5. 服务器：tleap 装配 prmtop（每个体系一次）
+
+```bash
+bash project_RRM/ver2/pipeline/build_amber_system.sh \
+    project_RRM/ver2/structures/modified/4BS2_8OG_G3.pdb \
+    project_RRM/ver2/runs/4BS2_8OG_G3
+```
+
+输出：
+- `runs/4BS2_8OG_G3.prmtop`
+- `runs/4BS2_8OG_G3.inpcrd`
+- `runs/4BS2_8OG_G3.solvated.pdb`
+
+### 6. OpenMM：直接读 prmtop（Windows 或服务器都行）
 
 ```python
-# pipeline/run_md.py（OpenMM 路线）
-from openmm.app import *
-ff = ForceField(
-    'amber14/protein.ff14SB.xml',
-    'amber14/RNA.OL3.xml',
-    'amber14/tip3p.xml',                       # 或 OPC
-    'force_fields/openmm_xml/8OG_RNA.xml',
-)
-# Modeller, addSolvent, createSystem, ...
+# pipeline/run_md.py
+from openmm.app import AmberPrmtopFile, AmberInpcrdFile, Simulation, ...
+prm = AmberPrmtopFile('runs/4BS2_8OG_G3.prmtop')
+inp = AmberInpcrdFile('runs/4BS2_8OG_G3.inpcrd')
+system = prm.createSystem(nonbondedMethod=PME, nonbondedCutoff=1.2*nm, ...)
+# minimize, equilibrate, produce
 ```
+
+**不需要 OpenMM ForceField XML**。prmtop 已包含全部参数。
 
 ### 6. 验证标准（必跑）
 

@@ -46,15 +46,31 @@ OL3 修正的 χ 二面角参数是按 N9 类型（`N*`）匹配的。ver_1 保�
 
 ## 解决方案
 
-**不要继续改自建 XML**。直接用 modXNA：
+**不要继续改自建 XML**。用 modXNA 提供的 RESP 参数 + tleap 组装路线（不是 OpenMM XML 路线）。架构和命名陷阱见 [`pipeline.md`](pipeline.md) 和 [`../force_fields/VERSIONS.md`](../force_fields/VERSIONS.md)。
 
-```bash
-git clone https://github.com/modxna/modxna project_RRM/ver2/force_fields/modxna
-```
+## 第二轮发现的陷阱（2026-05-01 探索期间）
 
-modXNA 提供 `8OG.mol2` + `frcmod.modxna`，这是 RESP/HF/6-31G\* 拟合 + 完整 bonded terms 的 OL3-RNA 兼容参数集。
+ver_2 启动后第一周发现的**新一类失败**——和 ver_1 失败模式无关，但同等致命：
 
-转换为 OpenMM XML 的步骤见 [`pipeline.md`](pipeline.md)。
+### 5. 误把 modXNA 的 PSU 当成天然 pseudouridine
+
+modXNA 是为药物化学（antisense oligonucleotides）设计的，命名不遵循天然修饰的 PDB 约定：
+- `PSU.mol2` = **2-thio-5-isobutyl-pseudouridine**（设计衍生物，含 S8 + 烷基侧链），不是天然 ψ
+- 天然 ψ 在 modXNA 里叫 **`PUU.mol2`**（HEAD01=C5，C-糖苷是 ψ 的定义特征）
+- `M6A.mol2` = N6,N6-dimethyl，**不是 m6A**
+- `DMA.mol2` = 2,8-dimethyl，跟 N6,N6-dimethyl-A（俗称 DMA）不一样
+
+**症状**（如果没发现就跑了）：模拟会运行起来，但生物学结论完全错误——你以为在研究天然修饰，实际在跑设计药物分子。
+
+**避免方法**：永远先看 base mol2 的 ATOM 段（特别是 HEAD01 和"额外原子"），而不是只信文件名。
+
+### 6. modXNA base mol2 的电荷不能直接拼到 OL3 sugar/backbone
+
+base mol2 里的 USER_CHARGES 是 fragment-level RESP——按 modXNA 的 base+sugar+backbone 模块化协议设计的。把这些电荷直接和 amber14/RNA.OL3.xml 的标准 sugar+phosphate 拼在一起，**总电荷不会是整数**（重复了 ver_1 第 2 项失败）。
+
+**正确做法**：必须运行 `modxna.sh` 在 Linux + AmberTools 环境组装出 `.lib`，让 modXNA 的内部协议把连接处的电荷重分配到位。组装好的 .lib 总电荷 = -1.0（含磷酸）。
+
+详见 [`../results/inspect_modxna.md`](../results/inspect_modxna.md) 的"After stripping"列——4 个修饰里没有一个直接拼出整数总电荷。
 
 ## 验证标准
 

@@ -4,15 +4,20 @@
 
 ## 总览
 
-**好消息**：modXNA 一站式覆盖全部 4 个修饰（已 clone + 验证 `dat/lib_base/{8OG,PSU,M1A,M6A}.mol2` 全部存在）。
-后两栏的"升级路线"仅在 modXNA 在 4BS2 上验证不通过时才启用。
+**修正后状态**（详见 [`../results/inspect_modxna.md`](../results/inspect_modxna.md)）：
 
-| 修饰 | 主用 | 升级路线（仅当 modXNA 不收敛时） | 状态 |
-|------|------|-----|------|
-| 8oxoG | modXNA `8OG.mol2` + `frcmod.modxna` | — | clone OK，待 OpenMM XML 转换 |
-| Ψ (PSU) | modXNA `PSU.mol2` + `frcmod.modxna` | Sarzyńska/Lahiri 2022 (DOI 10.1007/s10822-022-00447-4) SI | clone OK，待 OpenMM XML 转换 |
-| m1A | modXNA `M1A.mol2` + `frcmod.modxna` | Xu/MacKerell 2016 (CHARMM 路线，DOI 10.1002/jcc.24307) | clone OK，待 OpenMM XML 转换 |
-| m6A | modXNA `M6A.mol2` + `frcmod.modxna` | Bussi `ff-m6a-fit5_AC.rtp` (github.com/bussilab/m6a-charge-fitting) | clone OK，待 OpenMM XML 转换 |
+| 修饰 | 主用 | 备注 |
+|------|------|------|
+| 8oxoG | **modXNA `8OG.mol2`** + `frcmod.modxna` | ✅ 标准结构（16 个 base 原子，含 O8 + N7-H7） |
+| Ψ (pseudouridine) | **modXNA `PUU.mol2`** ⚠️ 不是 PSU | ✅ 标准结构（HEAD01=C5，C-糖苷连接） |
+| m1A | **modXNA `M1A.mol2`** | ✅ 标准结构（N1 上接甲基 C11） |
+| m6A | **Bussi 2022** `ff-m6a-fit5_AC.rtp` | ❌ modXNA 不含标准 m6A，必须外部 |
+
+⚠️ **关键陷阱**：modXNA 是为药物化学（ASO/siRNA）设计的，命名约定与天然 RNA 修饰不一致：
+- modXNA `PSU` = 2-thio-5-isobutyl 的设计 ψ 衍生物（**不是天然 ψ**）
+- modXNA `M6A` = N6,N6-dimethyladenosine（**不是天然 m6A**）
+- modXNA `DMA` = 2,8-dimethyladenosine
+- 天然 ψ 在 modXNA 里叫 **PUU**
 
 modXNA 的 **commit hash 和 license** 见 [`../force_fields/VERSIONS.md`](../force_fields/VERSIONS.md)。
 
