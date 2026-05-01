@@ -386,16 +386,21 @@ system = ff.createSystem(
 integrator = LangevinMiddleIntegrator(300*kelvin, 1/picosecond, 4*femtoseconds)
 
 # --- Platform: CUDA > OpenCL > CPU ---
+sim = None
 for pname in ('CUDA', 'OpenCL', 'CPU'):
     try:
         platform = Platform.getPlatformByName(pname)
+        props = {{'CudaPrecision': 'mixed'}} if pname == 'CUDA' else {{}}
+        sim = Simulation(modeller.topology, system, integrator, platform, props)
         print(f"Using platform: {{pname}}")
         break
-    except Exception:
+    except Exception as e:
+        print(f"  {{pname}} failed: {{e}}")
+        if pname != 'CPU':
+            integrator = LangevinMiddleIntegrator(300*kelvin, 1/picosecond, 4*femtoseconds)
         continue
-
-props = {{'CudaPrecision': 'mixed'}} if pname == 'CUDA' else {{}}
-sim = Simulation(modeller.topology, system, integrator, platform, props)
+if sim is None:
+    raise RuntimeError("No usable OpenMM platform found")
 sim.context.setPositions(modeller.positions)
 
 # --- Energy minimization ---
@@ -777,7 +782,7 @@ def _run_ptm_job(pdb_path: Path, ptms: list, out_path: Path):
     global job_running
     job_running = True
     try:
-        from app.ptm_builder import apply_ptm, PATCHES
+        from ptm_builder import apply_ptm, PATCHES
         current_path = pdb_path
         import tempfile, os
 
@@ -876,7 +881,7 @@ def api_classify():
     try:
         comp = classify_components(pdb_path)
         # Return FF options alongside
-        from app.ptm_builder import PATCHES as _PATCHES
+        from ptm_builder import PATCHES as _PATCHES
         ptm_labels = {
             code: {
                 "label": f"{p.get('from','?')} -> {p['rename']}",

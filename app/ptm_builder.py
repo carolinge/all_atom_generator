@@ -201,6 +201,56 @@ PATCHES: dict[str, dict] = {
     },
 }
 
+# ── Full intra-residue bond lists for PTM products ────────────────────────────
+# OpenMM's createStandardBonds() ignores residues whose names aren't in its
+# built-in table.  For non-standard PTM residues we must emit CONECT records
+# for *every* internal bond, otherwise ForceField template matching fails with
+# "atoms match X but bonds are different".
+
+# Standard guanosine (G) intra-residue bonds, plus 8OG patch deltas:
+#   delete (C8,H8); add (C8,O8) and (N7,H7)
+_BONDS_8OG = [
+    # Phosphate
+    ("P", "OP1"), ("P", "OP2"), ("P", "O5'"),
+    # Sugar backbone
+    ("O5'", "C5'"), ("C5'", "C4'"), ("C5'", "H5'"), ("C5'", "H5''"),
+    ("C4'", "O4'"), ("C4'", "C3'"), ("C4'", "H4'"),
+    ("O4'", "C1'"),
+    ("C3'", "O3'"), ("C3'", "C2'"), ("C3'", "H3'"),
+    ("C2'", "O2'"), ("C2'", "C1'"), ("C2'", "H2'"),
+    ("O2'", "HO2'"),
+    ("C1'", "N9"), ("C1'", "H1'"),
+    # Purine ring (8OG: no H8; instead C8=O8 and N7-H7)
+    ("N9", "C8"), ("N9", "C4"),
+    ("C8", "N7"), ("C8", "O8"),       # 8OG: O8 replaces H8
+    ("N7", "C5"), ("N7", "H7"),       # 8OG: H7 added
+    ("C5", "C4"), ("C5", "C6"),
+    ("C4", "N3"),
+    ("N3", "C2"),
+    ("C2", "N1"), ("C2", "N2"),
+    ("N2", "H21"), ("N2", "H22"),
+    ("N1", "H1"), ("N1", "C6"),
+    ("C6", "O6"),
+]
+
+# 5' terminal 8OG (8OG5): no incoming P from 5' side, gets H5T on O5'.
+# AMBER 5'-terminal RNA uses HO5' instead of phosphate.
+_BONDS_8OG5 = [b for b in _BONDS_8OG if "P" not in b and b != ("P", "OP1") and b != ("P", "OP2") and b != ("P", "O5'")]
+_BONDS_8OG5 = [b for b in _BONDS_8OG5 if b != ("O5'", "C5'")] + [("O5'", "C5'"), ("O5'", "HO5'")]
+
+# 3' terminal 8OG (8OG3): O3' has HO3' instead of bond to next residue's P
+_BONDS_8OG3 = _BONDS_8OG + [("O3'", "HO3'")]
+
+# Standard serine-based phosphorylation (SEP/TPO/PTR) internal bonds.
+# These residues are actually in OpenMM's amber14 standard tables, but listed
+# here for completeness in case future PTMs need them.
+_BONDS_BY_PTM: dict[str, list[tuple[str, str]]] = {
+    "8OG":  _BONDS_8OG,
+    "8OG5": _BONDS_8OG5,
+    "8OG3": _BONDS_8OG3,
+}
+
+
 # Aliases: G5, G3 (terminal RNA), RG (some PDB naming) all map to 8OG patch
 _RESNAME_TO_PATCH: dict[str, str] = {
     "SER": "SEP",
@@ -218,6 +268,114 @@ _8OG_TERMINAL: dict[str, str] = {
     "G5": "8OG5",
     "G3": "8OG3",
 }
+
+
+# ── Standard nucleotide names (OpenMM has templates for these) ────────────────
+_STANDARD_NA = {
+    "A", "C", "G", "U", "DA", "DC", "DG", "DT",        # internal
+    "A3", "C3", "G3", "U3", "DA3", "DC3", "DG3", "DT3", # 3' terminal
+    "A5", "C5", "G5", "U5", "DA5", "DC5", "DG5", "DT5", # 5' terminal
+    "RA", "RC", "RG", "RU",                               # alternate RNA names
+}
+
+
+def _add_backbone_conect(pdb_str: str) -> str:
+    """Add CONECT records for non-standard PTM residues.
+
+    Two kinds of CONECT records are emitted:
+
+    1. **Inter-residue backbone bond** (e.g. O3'(prev) -> P(modified)).
+       OpenMM's ``createStandardBonds()`` only creates these when *both*
+       residues have standard templates; if one neighbour is non-standard
+       (e.g. 8OG), the bond is silently dropped.
+
+    2. **Full intra-residue bonds** for non-standard residues (looked up in
+       ``_BONDS_BY_PTM``).  Without these, ForceField template matching
+       fails because the atoms match the template but no bonds are seen.
+
+    OpenMM's PDBFile reader honours CONECT records.
+    """
+    # Collect per-residue info in original PDB order.
+    # key = (chain, resseq), value = {atom_name: serial, resname, atoms: {name: serial}}
+    residues: dict[tuple, dict] = {}
+    order: list[tuple] = []
+
+    for line in pdb_str.splitlines():
+        if not line.startswith(("ATOM", "HETATM")):
+            continue
+        # PDB fixed-width columns
+        serial = int(line[6:11])
+        aname  = line[12:16].strip()
+        chain  = line[21]
+        try:
+            resseq = int(line[22:26])
+        except ValueError:
+            continue
+        resname = line[17:20].strip()
+        if not resname:
+            resname = line[17:21].strip()
+
+        key = (chain, resseq)
+        if key not in residues:
+            residues[key] = {"resname": resname, "atoms": {}}
+            order.append(key)
+        residues[key]["atoms"][aname] = serial
+
+    # ── (1) inter-residue backbone bonds across non-standard residues ─────────
+    conect_pairs: list[tuple[int, int]] = []
+    for i in range(len(order) - 1):
+        k1, k2 = order[i], order[i + 1]
+        if k1[0] != k2[0]:          # different chains
+            continue
+        r1, r2 = residues[k1], residues[k2]
+        n1 = r1["resname"].upper()
+        n2 = r2["resname"].upper()
+
+        if n1 in _STANDARD_NA and n2 in _STANDARD_NA:
+            continue
+
+        s_o3 = r1["atoms"].get("O3'")
+        s_p  = r2["atoms"].get("P")
+        if s_o3 is not None and s_p is not None:
+            conect_pairs.append((s_o3, s_p))
+
+    # ── (2) intra-residue bonds for non-standard PTM residues ─────────────────
+    for key in order:
+        rname = residues[key]["resname"].upper()
+        bond_list = _BONDS_BY_PTM.get(rname)
+        if not bond_list:
+            continue
+        atoms = residues[key]["atoms"]
+        for a1, a2 in bond_list:
+            s1, s2 = atoms.get(a1), atoms.get(a2)
+            if s1 is not None and s2 is not None:
+                conect_pairs.append((s1, s2))
+
+    if not conect_pairs:
+        return pdb_str
+
+    # Build CONECT lines (pair-per-line for clarity & compatibility)
+    conect_lines = []
+    seen = set()
+    for s1, s2 in conect_pairs:
+        pair = (min(s1, s2), max(s1, s2))
+        if pair in seen:
+            continue
+        seen.add(pair)
+        conect_lines.append(f"CONECT{s1:5d}{s2:5d}")
+        conect_lines.append(f"CONECT{s2:5d}{s1:5d}")
+
+    lines = pdb_str.rstrip().splitlines()
+    result = []
+    for line in lines:
+        if line.startswith("END"):
+            result.extend(conect_lines)
+        result.append(line)
+    # If no END line was found, append CONECT at the end
+    if not any(l.startswith("END") for l in lines):
+        result.extend(conect_lines)
+
+    return "\n".join(result) + "\n"
 
 
 # ── BioPython-based structure modification ────────────────────────────────────
@@ -353,7 +511,14 @@ def apply_ptm(pdb_path: str | Path,
     io.set_structure(structure)
     buf = StringIO()
     io.save(buf)
-    return buf.getvalue()
+    pdb_str = buf.getvalue()
+
+    # -- fix backbone bonds: add CONECT records for O3'->P across modified
+    #    residues.  OpenMM's createStandardBonds() skips non-standard residue
+    #    names, so the O3'(prev)->P(modified) bond gets lost.  CONECT records
+    #    are honoured by OpenMM's PDBFile reader and restore these bonds.
+    pdb_str = _add_backbone_conect(pdb_str)
+    return pdb_str
 
 
 # ── Convenience: list what PTMs are applicable to a residue name ──────────────
