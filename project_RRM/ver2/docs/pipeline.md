@@ -1,4 +1,4 @@
-# Pipeline：CIF → 修饰 RNA → 4BS2 复合物 MD
+# Pipeline：CIF → 修饰 RNA → 4BS2 复合物 MD（ver_2）
 
 > **架构关键决策**（2026-05-01）：放弃 OpenMM XML 转换路线，改为 **prmtop 路线**。
 > 原因：modXNA 的 base mol2 charges 是 fragment-level RESP，不能直接拼到 OL3 sugar+backbone（电荷不自洽）。modxna.sh + tleap 组装才得到正确电荷。OpenMM 的 `AmberPrmtopFile` 直接读 prmtop，根本不需要 OpenMM XML。

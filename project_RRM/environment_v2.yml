@@ -3,6 +3,7 @@
 # Activate: conda activate allatom_v2
 #
 # 与根目录的 environment.yml（app/ 用的）独立，名字不同避免冲突。
+# 与 ver_1 的 allatom 也独立，确保 ver_1 重现性。
 
 name: allatom_v2
 
@@ -15,12 +16,17 @@ dependencies:
 
   # MD engine
   - openmm>=8.1
-  - openmmforcefields>=0.12   # 提供 amber14, charmm36 的 OpenMM XML
+  # cuda-version pin only matters on the server; on Windows it's auto-detected.
+  # If installing on the server, also: module load cuda/12.5
+  - openmmforcefields>=0.12
 
-  # Structure preparation + parameter conversion
+  # Structure preparation + AMBER prmtop pipeline
   - pdbfixer
-  - parmed                    # 用于 modxna mol2/frcmod → OpenMM XML 转换
-  # - ambertools              # Linux only — 用于 tleap 路线，Windows 上不装
+  - parmed
+  # ambertools = tleap + cpptraj + sander (and more); LINUX-ONLY package.
+  # On Windows this line is silently a no-op; conda will skip it.
+  # On the cluster (Linux) this is what enables the prmtop route.
+  - ambertools>=24
 
   # Trajectory analysis
   - mdanalysis>=2.7
@@ -52,7 +58,10 @@ dependencies:
   - black
   - pip
 
-  # Optional future-proofing for self-derived RESP charges (DFT pipeline)
+  # BioPython is needed by ptm_builder.py for PDB parsing
+  - biopython
+
+  # Optional future: self-derived RESP via Psi4 + PsiRESP
   # - psi4
   # - pip:
   #     - psiresp

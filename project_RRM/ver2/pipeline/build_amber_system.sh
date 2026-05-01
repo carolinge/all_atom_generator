@@ -1,66 +1,82 @@
 #!/bin/bash
 # build_amber_system.sh
 # ======================
-# Server-side: take a prepared 4BS2 PDB (with the modified residue already
-# placed via NeRF) and run tleap to generate the AMBER prmtop + inpcrd.
-#
-# OpenMM reads the prmtop directly via AmberPrmtopFile — no OpenMM XML
-# conversion needed.
+# Server-side: take a prepared 4BS2-class PDB (with the modified residue
+# already placed) and run tleap to produce a solvated AMBER prmtop+inpcrd.
 #
 # Usage:
-#     bash build_amber_system.sh <input_pdb> <output_prefix>
-# Example:
-#     bash build_amber_system.sh \
-#         project_RRM/ver2/structures/modified/4BS2_8OG_G3.pdb \
-#         runs/4BS2_8OG_G3
+#     bash build_amber_system.sh <name> <input_pdb>
 #
-# Prerequisites:
-#   - allatom_v2 conda env with ambertools active
-#   - .lib files for the modified residues already built (run
-#     build_modxna_residues.sh first)
+# Example:
+#     bash build_amber_system.sh 4BS2_8OG_G3 \
+#         project_RRM/ver2/structures/modified/4BS2_8OG_G3.pdb
+#
+# Output (under $PROJECT/replicas_v2/<name>/system/):
+#     <name>.prmtop
+#     <name>.inpcrd
+#     <name>.solvated.pdb
+#     <name>.tleap.in
+#     <name>.tleap.log
+#
+# Each replica directory under replicas_v2/<name>/r{1,2,3}/ then symlinks
+# or copies prmtop+inpcrd from system/.
 
 set -euo pipefail
 
 if [ $# -ne 2 ]; then
-    echo "Usage: $0 <input_pdb> <output_prefix>"
+    echo "Usage: $0 <name> <input_pdb>"
+    echo "  e.g.  $0 4BS2_8OG_G3 project_RRM/ver2/structures/modified/4BS2_8OG_G3.pdb"
     exit 1
 fi
 
-INPUT_PDB=$1
-OUT_PREFIX=$2
+NAME=$1
+INPUT_PDB=$2
 
-REPO_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
-LIB_DIR="$REPO_ROOT/project_RRM/ver2/force_fields/openmm_xml/lib_amber"
-FRCMOD="$REPO_ROOT/project_RRM/ver2/force_fields/modxna/dat/frcmod.modxna"
+PROJECT="/data/biophys/carolinge/clawork/37_OXR"
+LIB_DIR="$PROJECT/force_fields/lib_amber"
+FRCMOD="$PROJECT/repo/project_RRM/ver2/force_fields/modxna/dat/frcmod.modxna"
+SYSDIR="$PROJECT/replicas_v2/$NAME/system"
 
 if [ ! -f "$INPUT_PDB" ]; then
-    echo "ERROR: input PDB $INPUT_PDB not found"
-    exit 1
+    # Try resolving relative to repo
+    if [ -f "$PROJECT/repo/$INPUT_PDB" ]; then
+        INPUT_PDB="$PROJECT/repo/$INPUT_PDB"
+    else
+        echo "ERROR: input PDB not found: $INPUT_PDB"
+        exit 1
+    fi
 fi
 if [ ! -f "$FRCMOD" ]; then
-    echo "ERROR: $FRCMOD not found"
+    echo "ERROR: $FRCMOD not found. Sync repo first."
     exit 1
 fi
 
-mkdir -p "$(dirname "$OUT_PREFIX")"
+if ! command -v tleap >/dev/null 2>&1; then
+    echo "ERROR: tleap not in PATH. conda activate allatom_v2 first."
+    exit 1
+fi
 
-# Auto-detect which modxna libs to load by scanning lib_amber/
+mkdir -p "$SYSDIR"
+
+# Auto-detect which modxna libs to load from $LIB_DIR
 LIB_LOAD_LINES=""
 for lib in "$LIB_DIR"/*.lib; do
     [ -f "$lib" ] || continue
     LIB_LOAD_LINES+="loadOff $lib"$'\n'
 done
+if [ -z "$LIB_LOAD_LINES" ]; then
+    echo "WARN: no .lib files in $LIB_DIR. Did you run build_modxna_residues.sh?"
+fi
 
-cat > "${OUT_PREFIX}.tleap.in" <<EOF
-# Auto-generated tleap script for $INPUT_PDB
+cat > "$SYSDIR/$NAME.tleap.in" <<EOF
+# Auto-generated tleap script for $NAME
 source leaprc.protein.ff14SB
 source leaprc.RNA.OL3
 source leaprc.water.tip3p
 
-# Load modXNA shared parameters (frcmod) and assembled residue libraries.
+# modXNA shared parameters + assembled residue libraries
 loadAmberParams $FRCMOD
 $LIB_LOAD_LINES
-# Read the prepared, modified structure
 mol = loadPdb $INPUT_PDB
 
 # Solvation: 1.0 nm padding, 0.15 M NaCl
@@ -69,22 +85,23 @@ addIonsRand mol Na+ 0
 addIonsRand mol Na+ 30
 addIonsRand mol Cl- 30
 
-# Output
-saveAmberParm mol ${OUT_PREFIX}.prmtop ${OUT_PREFIX}.inpcrd
-savePdb mol ${OUT_PREFIX}.solvated.pdb
+saveAmberParm mol $SYSDIR/$NAME.prmtop $SYSDIR/$NAME.inpcrd
+savePdb mol $SYSDIR/$NAME.solvated.pdb
 
 quit
 EOF
 
 echo ">>> Running tleap"
-tleap -f "${OUT_PREFIX}.tleap.in" 2>&1 | tee "${OUT_PREFIX}.tleap.log"
+tleap -f "$SYSDIR/$NAME.tleap.in" 2>&1 | tee "$SYSDIR/$NAME.tleap.log"
 
-# Validate
-if [ ! -f "${OUT_PREFIX}.prmtop" ] || [ ! -f "${OUT_PREFIX}.inpcrd" ]; then
-    echo "ERROR: prmtop or inpcrd not generated. Check ${OUT_PREFIX}.tleap.log"
+if [ ! -f "$SYSDIR/$NAME.prmtop" ] || [ ! -f "$SYSDIR/$NAME.inpcrd" ]; then
+    echo "ERROR: prmtop or inpcrd not produced. Check $SYSDIR/$NAME.tleap.log"
     exit 1
 fi
 
 echo ""
 echo "=== Built ==="
-ls -la "${OUT_PREFIX}.prmtop" "${OUT_PREFIX}.inpcrd" "${OUT_PREFIX}.solvated.pdb"
+ls -la "$SYSDIR/$NAME".{prmtop,inpcrd,solvated.pdb}
+echo ""
+echo "Next: copy run_md.py + sub.sh into $PROJECT/replicas_v2/$NAME/r{1,2,3}/"
+echo "      (use pipeline/spawn_replicas.sh)"
