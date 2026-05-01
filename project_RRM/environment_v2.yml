@@ -23,10 +23,18 @@ dependencies:
   # Structure preparation + AMBER prmtop pipeline
   - pdbfixer
   - parmed
-  # ambertools = tleap + cpptraj + sander (and more); LINUX-ONLY package.
-  # On Windows this line is silently a no-op; conda will skip it.
-  # On the cluster (Linux) this is what enables the prmtop route.
-  - ambertools>=24
+  # ambertools = tleap + cpptraj + sander; LINUX-ONLY package.
+  #
+  # IMPORTANT: do NOT install via `conda env create -f` together with
+  # the rest of the deps — the combined solve thrashes for 30+ min and
+  # often fails. Use server_setup.sh's strategy instead:
+  #   1. conda create allatom_v2 --clone allatom    (instant)
+  #   2. conda install -n allatom_v2 ambertools=24.8=*py311*  (~5 min)
+  # Pinning the build hash forces the solver to a single branch.
+  # The ambertools line below is therefore commented out — keep the
+  # baseline env free of it; install separately.
+  #
+  # - ambertools=24.8=*py311*
 
   # Trajectory analysis
   - mdanalysis>=2.7
