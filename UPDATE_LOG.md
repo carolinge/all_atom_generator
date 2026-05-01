@@ -6,6 +6,31 @@
 
 ---
 
+## [2026-05-01] project_RRM 重构 — ver_1 归档，ver_2 启动
+
+### 背景
+
+科学项目（TDP-43 RRM + 修饰 RNA MD）在 ver_1 阶段失败：自建 8OG OpenMM XML 在 6×100 ns replicas 中表现不可信。研究 agent 文献综述定位四类失败原因（详见 `project_RRM/ver2/docs/lessons_from_ver1.md`），核心结论：**不应自建力场，应使用已发表 RESP-derived 参数**。
+
+### 完成内容
+
+- **目录重构**：所有科学项目相关文件迁入 `project_RRM/`，与 `app/`（独立 Web UI）平行。
+  - `output/`、`prepared/`、`uploaded/`、`scripts/`、`example_2RRM/`、`4BS2.cif`、`4juy.pdb` → `project_RRM/ver1/`
+  - `app/` 完全未动
+- **ver_2 骨架**：`docs/`、`force_fields/`、`structures/`、`pipeline/`、`runs/`、`results/` + 4 篇文档（README、force_field_sources、lessons_from_ver1、pipeline、onboarding）
+- **力场就位**：`git clone` modXNA (Bergonzo 2024, GPL-3.0) → `project_RRM/ver2/force_fields/modxna/`，commit `595cff1b`。验证 `8OG.mol2`、`PSU.mol2`、`M1A.mol2`、`M6A.mol2` 全部齐全（一站式覆盖 4 个目标修饰）。
+- **conda env**：`project_RRM/environment_v2.yml`（名 `allatom_v2`，与 `app/` 用的根目录 `environment.yml` 隔离），未实际 create。
+
+### 待办
+
+- [ ] modXNA mol2/frcmod → OpenMM XML 转换脚本（ParmEd 路线）
+- [ ] 验证 modXNA `8OG.mol2` 中两个 `O6` 原子名歧义（atom 6 应为 O8）
+- [ ] 移植 ver_1 NeRF 几何拼接逻辑到 `pipeline/`，扩展 PSU/M1A/M6A patches
+- [ ] 在 4BS2 上跑 8OG 第一个 replica 验证 modXNA pipeline
+- [ ] m1A / m6A 单核苷 free-RNA 验证（无蛋白）
+
+---
+
 ## [2026-03-19] 环境搭建 — conda env allatom
 
 ### 完成内容

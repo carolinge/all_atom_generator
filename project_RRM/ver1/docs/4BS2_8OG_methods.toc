@@ -1,0 +1,45 @@
+\contentsline {section}{\numberline {1}Software environment}{2}{section.1}%
+\contentsline {subsection}{\numberline {1.1}Operating systems and hardware}{2}{subsection.1.1}%
+\contentsline {paragraph}{Important note on disk layout.}{2}{section*.2}%
+\contentsline {subsection}{\numberline {1.2}Conda environment}{2}{subsection.1.2}%
+\contentsline {section}{\numberline {2}Project layout}{2}{section.2}%
+\contentsline {subsection}{\numberline {2.1}Workstation (\texttt {d:/all\_atom/})}{2}{subsection.2.1}%
+\contentsline {subsection}{\numberline {2.2}Cluster (\texttt {/data/biophys/carolinge/clawork/37\_OXR/})}{3}{subsection.2.2}%
+\contentsline {section}{\numberline {3}Source structure: 4BS2}{3}{section.3}%
+\contentsline {section}{\numberline {4}Force field for 8-oxoguanosine}{3}{section.4}%
+\contentsline {subsection}{\numberline {4.1}Atomic changes vs. canonical guanosine}{4}{subsection.4.1}%
+\contentsline {subsection}{\numberline {4.2}Partial charges}{4}{subsection.4.2}%
+\contentsline {paragraph}{Reference and limitations.}{4}{section*.3}%
+\contentsline {subsection}{\numberline {4.3}Supplemental bonded parameters}{4}{subsection.4.3}%
+\contentsline {subsection}{\numberline {4.4}Residue templates}{5}{subsection.4.4}%
+\contentsline {subsection}{\numberline {4.5}Validation}{5}{subsection.4.5}%
+\contentsline {section}{\numberline {5}Initial structure preparation}{5}{section.5}%
+\contentsline {subsection}{\numberline {5.1}Wild-type structure}{5}{subsection.5.1}%
+\contentsline {subsection}{\numberline {5.2}8OG variant: residue surgery via NeRF}{6}{subsection.5.2}%
+\contentsline {paragraph}{NeRF algorithm.}{6}{section*.4}%
+\contentsline {paragraph}{Reproduction.}{6}{lstlisting.-4}%
+\contentsline {subsection}{\numberline {5.3}File outputs}{6}{subsection.5.3}%
+\contentsline {section}{\numberline {6}Simulation protocol}{7}{section.6}%
+\contentsline {subsection}{\numberline {6.1}Force-field stack}{7}{subsection.6.1}%
+\contentsline {subsection}{\numberline {6.2}Solvation}{7}{subsection.6.2}%
+\contentsline {subsection}{\numberline {6.3}Energy minimisation and equilibration}{7}{subsection.6.3}%
+\contentsline {subsection}{\numberline {6.4}Production}{7}{subsection.6.4}%
+\contentsline {subsection}{\numberline {6.5}Replica generation}{7}{subsection.6.5}%
+\contentsline {subsection}{\numberline {6.6}Slurm submission script}{8}{subsection.6.6}%
+\contentsline {subsection}{\numberline {6.7}Output files per replica}{8}{subsection.6.7}%
+\contentsline {subsection}{\numberline {6.8}Resuming a failed replica}{8}{subsection.6.8}%
+\contentsline {section}{\numberline {7}Analysis}{8}{section.7}%
+\contentsline {subsection}{\numberline {7.1}Single-trajectory binding analysis}{9}{subsection.7.1}%
+\contentsline {subsection}{\numberline {7.2}Single-trajectory RMSF}{9}{subsection.7.2}%
+\contentsline {subsection}{\numberline {7.3}Multi-replica analysis with partial-coverage averaging}{9}{subsection.7.3}%
+\contentsline {paragraph}{Avoiding the active-trajectory race condition.}{9}{section*.6}%
+\contentsline {paragraph}{Reproduction.}{9}{lstlisting.-10}%
+\contentsline {subsection}{\numberline {7.4}Plot generation}{10}{subsection.7.4}%
+\contentsline {section}{\numberline {8}Step-by-step reproduction recipe}{10}{section.8}%
+\contentsline {subsection}{\numberline {8.1}One-time setup (workstation)}{10}{subsection.8.1}%
+\contentsline {subsection}{\numberline {8.2}One-time setup (cluster)}{10}{subsection.8.2}%
+\contentsline {subsection}{\numberline {8.3}Generate starting structures}{10}{subsection.8.3}%
+\contentsline {subsection}{\numberline {8.4}Generate replica directories}{10}{subsection.8.4}%
+\contentsline {subsection}{\numberline {8.5}Upload to cluster and submit}{10}{subsection.8.5}%
+\contentsline {subsection}{\numberline {8.6}Wait, then analyse}{11}{subsection.8.6}%
+\contentsline {section}{\numberline {9}Known issues and gotchas}{11}{section.9}%

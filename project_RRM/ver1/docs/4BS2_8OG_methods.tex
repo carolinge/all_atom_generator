@@ -1,0 +1,773 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[a4paper, margin=2.2cm]{geometry}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{hyperref}
+\hypersetup{colorlinks=true, linkcolor=blue!60!black, urlcolor=blue!60!black}
+\usepackage{amsmath, amssymb}
+\usepackage{caption}
+\usepackage{siunitx}
+\sisetup{detect-all}
+\usepackage{enumitem}
+\usepackage{titling}
+\usepackage{fancyhdr}
+\usepackage[round,authoryear]{natbib}
+
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{\small Reproducibility Documentation}
+\lhead{\small 4BS2 8-oxoG MD --- C. Ge, 2026}
+\rfoot{\thepage}
+
+% Code listing style
+\definecolor{codegray}{rgb}{0.95,0.95,0.95}
+\definecolor{codeblue}{rgb}{0.10,0.30,0.65}
+\definecolor{codegreen}{rgb}{0.0,0.5,0.0}
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  backgroundcolor=\color{codegray},
+  frame=single,
+  rulecolor=\color{black!20},
+  numbers=left,
+  numberstyle=\tiny\color{black!50},
+  keywordstyle=\color{codeblue}\bfseries,
+  commentstyle=\color{codegreen}\itshape,
+  stringstyle=\color{red!60!black},
+  breaklines=true,
+  postbreak=\mbox{\textcolor{red}{$\hookrightarrow$}\space},
+  showstringspaces=false,
+  tabsize=2,
+}
+\lstdefinelanguage{xml}{
+  morekeywords={Residue,Atom,Bond,ExternalBond,HarmonicBondForce,Angle,
+    HarmonicAngleForce,Proper,Improper,PeriodicTorsionForce,ForceField,Residues},
+  morecomment=[s][\color{codegreen}]{<!--}{-->},
+  sensitive=true,
+}
+
+\title{Reproducibility Documentation:\\
+\large All-Atom MD Setup of 4BS2 with 8-Oxoguanosine RNA Modification}
+\author{Caroline Ge\\\small carolinge73@gmail.com}
+\date{April 30, 2026 (revision 2)}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+\noindent
+This document is a complete record of every step taken to set up,
+parameterise, simulate, and analyse the wild-type 4BS2 protein--RNA
+complex and its 8-oxoguanosine variant. It is written for an
+investigator with general MD experience but no prior knowledge of this
+project, with the explicit goal of bit-for-bit reproducibility.
+Every input file, command line, parameter value, and software version
+relevant to the published numbers is listed. All custom code is
+tracked in the repository at \texttt{d:/all\_atom} (Windows host) and
+deployed to \texttt{/data/biophys/carolinge/clawork/37\_OXR/} on the
+PKS \texttt{newton} cluster (referred to as ``bio'' below).
+\end{abstract}
+
+\tableofcontents
+\vspace{1em}
+
+% =============================================================================
+\section{Software environment}
+\label{sec:env}
+
+\subsection{Operating systems and hardware}
+
+\begin{tabular}{ll}
+\toprule
+Workstation              & Windows 10/11, Python 3.11, used for setup, analysis, plotting \\
+Cluster                  & \texttt{newton.pks.mpg.de}, Slurm scheduler (CentOS-style RHEL) \\
+GPUs                     & NVIDIA A100 (mixed precision; CUDA Toolkit 12.5 module) \\
+Cluster home             & \texttt{/home/carolinge}; \textbf{80 GB quota} \\
+Cluster scratch          & \texttt{/data/biophys/carolinge/} (1.4 PB pool, 444 TB free) \\
+\bottomrule
+\end{tabular}
+
+\paragraph{Important note on disk layout.}
+The cluster home filesystem (\texttt{/home}) has an 80 GB user quota.
+A single 100\,ns trajectory at the parameters used here is $\sim$3 GB,
+so all production output must be written to \texttt{/data}. We use a
+symlink to keep paths consistent:
+\begin{lstlisting}[language=bash]
+ln -s /data/biophys/carolinge/clawork/37_OXR ~/work/37_OXR
+\end{lstlisting}
+
+\subsection{Conda environment}
+
+The environment name on the cluster is \texttt{allatom}. Pinned versions
+of the load-bearing packages (\texttt{conda list}):
+
+\begin{tabular}{ll}
+\toprule
+\texttt{python}               & 3.11 \\
+\texttt{openmm}               & 8.2.0 \\
+\texttt{cuda-version}         & 12.5 \\
+\texttt{cuda-nvrtc}           & 12.5.82 \\
+\texttt{pdbfixer}             & 1.10 \\
+\texttt{mdanalysis}           & 2.10.0 \\
+\texttt{numpy}                & 2.x \\
+\texttt{biopython}            & 1.85 \\
+\texttt{matplotlib}           & 3.9.x \\
+\bottomrule
+\end{tabular}
+
+A frozen environment specification is committed to
+\texttt{environment\_server.yml} in the repository root.
+
+% =============================================================================
+\section{Project layout}
+\label{sec:layout}
+
+\subsection{Workstation (\texttt{d:/all\_atom/})}
+
+\begin{lstlisting}[language=bash]
+d:/all_atom/
+  app/
+    server.py                    # Flask UI for the MD setup pipeline
+    ptm_builder.py               # NeRF-based PTM applicator (defines 8OG patch)
+    ff_custom/
+      8OG_RNA_amber.xml          # Custom force field for 8-oxoguanosine
+    templates/index.html         # Web UI
+  scripts/
+    gen_4bs2_md.py               # Generate WT and 8OG starting structures
+    gen_replicas.py              # Generate 3 WT + 3 8OG replica directories
+    analyze_binding.py           # Single-trajectory binding analysis
+    analyze_rmsf.py              # Single-trajectory per-residue RMSF
+    analyze_replicas.py          # Multi-replica analysis with partial-cov averaging
+    plot_rmsf.py                 # Plot RMSF comparison
+    compare_wt_8og.py            # Plot WT vs 8OG comparison panels
+  output/
+    4BS2_WT_MD/                  # 10 ns preliminary WT run
+    4BS2_8OG_G3_MD/              # 10 ns preliminary 8OG run
+    4BS2_WT_r{1,2,3}/            # Local staging of 100 ns replica directories
+    4BS2_8OG_r{1,2,3}/
+    analysis/                    # All analysis CSVs and PNGs
+  docs/
+    4BS2_8OG_report.tex          # Main results report
+    4BS2_8OG_methods.tex         # This file
+\end{lstlisting}
+
+\subsection{Cluster (\texttt{/data/biophys/carolinge/clawork/37\_OXR/})}
+
+\begin{lstlisting}[language=bash]
+/data/biophys/carolinge/clawork/37_OXR/
+  04_4BS2_WT_MD/                 # 10 ns preliminary WT run
+  05_4BS2_8OG_G3_MD/             # 10 ns preliminary 8OG run
+  replicas/
+    4BS2_WT_r1/   ...   _r3/     # 100 ns WT replicas (3 GB DCD each)
+    4BS2_8OG_r1/  ...   _r3/     # 100 ns 8OG replicas
+  anal_gyrate/                   # All analysis output: CSVs, NPZs, PNGs
+  analyze_binding.py             # uploaded copies of the local scripts
+  analyze_rmsf.py
+  analyze_replicas.py
+\end{lstlisting}
+
+% =============================================================================
+\section{Source structure: 4BS2}
+\label{sec:source}
+
+The structure used as the starting point is PDB entry \textbf{4BS2}
+(\citealt{Lukavsky2013}; an RRM--RNA complex). The CIF file
+(\texttt{d:/all\_atom/4BS2.cif}) was downloaded from the RCSB PDB and
+contains:
+
+\begin{itemize}[leftmargin=*]
+\item Chain A: 174 amino acids (the RRM domain, GLY1--GLN174);
+\item Chain B: 12 nucleotides of single-stranded RNA with sequence
+\texttt{GUGUAGAAUGAAU}.
+\end{itemize}
+
+The third nucleotide on chain B (G3) is the target of the 8-oxo
+modification.
+
+% =============================================================================
+\section{Force field for 8-oxoguanosine}
+\label{sec:ff}
+
+The wild-type RNA force field is AMBER OL3 (\citealt{Perez2007},
+\texttt{amber14/RNA.OL3.xml} as shipped with OpenMM~8.2). 8OG requires
+a custom XML (\texttt{app/ff\_custom/8OG\_RNA\_amber.xml}) that
+\emph{augments}, not replaces, OL3. The two XMLs are loaded together
+when the system is built (Section~\ref{sec:run}).
+
+\subsection{Atomic changes vs. canonical guanosine}
+
+\begin{tabular}{lll}
+\toprule
+Atom & Change & Notes \\
+\midrule
+H8 & deleted & aromatic CH on C8 in G is removed \\
+C8 & atom type RNA-CP $\rightarrow$ RNA-C & sp$^{2}$ aromatic $\rightarrow$ sp$^{2}$ carbonyl C \\
+N7 & atom type RNA-NB $\rightarrow$ RNA-NA & aromatic N $\rightarrow$ sp$^{2}$ N--H \\
+O8 & added (RNA-O) & C8=O8 carbonyl oxygen \\
+H7 & added (RNA-H) & N7--H proton (donor) \\
+\bottomrule
+\end{tabular}
+
+No new atom types are introduced: RNA-C, RNA-O, RNA-NA, RNA-H, RNA-CB,
+RNA-N* are all defined in \texttt{amber14/RNA.OL3.xml}. Only previously
+unused \emph{combinations} of these types appear in 8OG, which is why
+new bond/angle/torsion entries are needed (Section~\ref{sec:ff:supp}).
+
+\subsection{Partial charges}
+\label{sec:ff:charges}
+
+Backbone and sugar charges are copied verbatim from the standard G
+residue in OL3.xml. Base charges are unchanged from G except in the
+N7--C8--O8--H7 region. Modified charges (in elementary charge units):
+
+\begin{tabular}{lcc}
+\toprule
+Atom & G (OL3) & 8OG (this work) \\
+\midrule
+C8       & $+0.1374$  (RNA-CP) & $+0.4000$ (RNA-C, carbonyl) \\
+H8       & $+0.1640$  (deleted) & --- \\
+N7       & $-0.5709$  (RNA-NB) & $-0.4600$ (RNA-NA) \\
+H7       & ---                  & $+0.3500$ (RNA-H) \\
+O8       & ---                  & $-0.5600$ (RNA-O) \\
+\bottomrule
+\end{tabular}
+
+\paragraph{Reference and limitations.} Values are derived by analogy
+from \citet{Aduri2007}, who report RESP charges for several modified
+RNA nucleosides. The exact 8OG charges in their work are for the
+DNA-context 8OG; for the RNA context we kept the OL3 backbone (which
+already differs from the Aduri scheme) and only redistributed charge
+locally around C8/N7. \textbf{Net residue charge is preserved at
+$-1.0$} (the same as canonical phosphorylated G):
+\begin{equation}
+\Delta q_{\text{base}} =
+   (-0.1640) + (+0.2626) + (+0.1109) + (+0.3500) + (-0.5600) = -0.0005 \approx 0.
+\end{equation}
+
+For publication-quality work this charge model should be replaced with
+a fresh QM RESP fit using the Antechamber pipeline. The validation
+script (\texttt{scripts/validate\_8OG\_ff.py}) confirms that the
+present charges and topology load cleanly into OpenMM and produce a
+finite-energy system, but does not validate accuracy.
+
+\subsection{Supplemental bonded parameters}
+\label{sec:ff:supp}
+
+OL3 lacks parameters for the type-pair \texttt{RNA-CB}--\texttt{RNA-NA}
+because canonical guanine has \texttt{RNA-NB} at N7. Five bonded terms
+are added by analogy to existing OL3 entries:
+
+\begin{lstlisting}[language=xml,caption={Supplemental bonded parameters in
+\texttt{8OG\_RNA\_amber.xml}},captionpos=b]
+<HarmonicBondForce>
+  <!-- C5(CB)-N7(NA) bond, derived from CB-NB in OL3.xml: k=346435, r=0.1391 nm -->
+  <Bond k="346435.2" length="0.1390"
+        type1="RNA-CB" type2="RNA-NA"/>
+</HarmonicBondForce>
+
+<HarmonicAngleForce>
+  <!-- C8-N7-C5 angle in 5-membered imidazole ring (~103.8 deg = 1.8117 rad)
+       analogous to RNA-CB-RNA-NB-RNA-CP in OL3 -->
+  <Angle angle="1.8117" k="585.76"
+         type1="RNA-CB" type2="RNA-NA" type3="RNA-C"/>
+
+  <!-- C5-N7-H7 exocyclic angle (~139.4 deg = 2.433 rad).
+       Derived from planarity: 360 - 103.8 (C8-N7-C5) - 116.8 (C8-N7-H7) -->
+  <Angle angle="2.433" k="418.40"
+         type1="RNA-CB" type2="RNA-NA" type3="RNA-H"/>
+</HarmonicAngleForce>
+
+<PeriodicTorsionForce ordering="amber">
+  <!-- X-CB-NA-X torsion, analogous to X-CB-NB-X in OL3 -->
+  <Proper k1="10.6692" periodicity1="2" phase1="3.141592653589793"
+          type1="" type2="RNA-CB" type3="RNA-NA" type4=""/>
+
+  <!-- N* improper to enforce planarity at N9 (analogous to G in OL3,
+       updated for the new C8 atom type) -->
+  <Improper k1="4.184" periodicity1="2" phase1="3.141592653589793"
+            type1="RNA-N*" type2="RNA-CB" type3="RNA-C" type4="RNA-CT"/>
+</PeriodicTorsionForce>
+\end{lstlisting}
+
+All other 8OG bonded interactions use parameters that already exist in
+OL3 for canonical RNA atom-type pairs.
+
+\subsection{Residue templates}
+Three residue templates are defined to handle the three positional
+contexts of 8OG in an RNA chain:
+\begin{itemize}[leftmargin=*]
+\item \texttt{8OG} -- internal residue, \texttt{ExternalBond} on
+both \texttt{P} (5$'$ side) and \texttt{O3'} (3$'$ side).
+\item \texttt{8OG5} -- 5$'$-terminal: no phosphate; \texttt{HO5'} caps
+\texttt{O5'}; only \texttt{O3'} forms an external bond.
+\item \texttt{8OG3} -- 3$'$-terminal: no external bond on \texttt{O3'};
+\texttt{HO3'} cap added.
+\end{itemize}
+
+\subsection{Validation}
+The script \texttt{scripts/validate\_8OG\_ff.py} loads OL3 + the custom
+XML, builds a 5$'$-terminal 8OG mononucleotide topology, and calls
+\texttt{ff.createSystem()}. Failure of this step (for example, after
+introducing a typo in the XML) indicates that the parameter set is
+incomplete; success indicates that \emph{at least} the bonded topology
+is consistent.
+
+% =============================================================================
+\section{Initial structure preparation}
+\label{sec:prep}
+
+The full preparation pipeline is encapsulated in the script
+\texttt{scripts/gen\_4bs2\_md.py}; the key steps are summarised here so
+the reader can recreate them by hand if needed.
+
+\subsection{Wild-type structure}
+\begin{enumerate}[leftmargin=*]
+\item Load \texttt{4BS2.cif} via PDBFixer.
+\item Call \texttt{findMissingResidues()} (no terminal trimming).
+\item Call \texttt{findMissingAtoms()} and \texttt{addMissingAtoms()}.
+\item Call \texttt{addMissingHydrogens(pH=7.0)}.
+\item Write the result to \texttt{4BS2\_prepared.pdb}
+(3164 heavy + H atoms, single MODEL).
+\end{enumerate}
+
+\subsection{8OG variant: residue surgery via NeRF}
+\label{sec:prep:nerf}
+
+The 8OG variant is produced from the prepared WT PDB by an idealised
+geometric procedure implemented in
+\texttt{app/ptm\_builder.py}. The procedure for chain B residue 3 is:
+
+\begin{enumerate}[leftmargin=*]
+\item Read the WT PDB with BioPython.
+\item Locate the target residue (chain B, resseq 3, resname G).
+\item Delete atom H8 from the residue.
+\item Generate the position of \texttt{O8} using the Natural Extension
+Reference Frame (NeRF) algorithm with three reference atoms (N9, N7, C8)
+and ideal internal coordinates:
+\begin{itemize}[leftmargin=*]
+\item Bond \texttt{C8--O8}: 1.230\,\si{\angstrom}
+\item Angle \texttt{N7--C8--O8}: 128.8\textdegree
+\item Dihedral \texttt{N9--N7--C8--O8}: 180\textdegree (O8 trans to N9)
+\end{itemize}
+\item Generate the position of \texttt{H7} from references (C8, C5, N7):
+\begin{itemize}[leftmargin=*]
+\item Bond \texttt{N7--H7}: 1.010\,\si{\angstrom}
+\item Angle \texttt{C5--N7--H7}: 125.2\textdegree
+\item Dihedral \texttt{C8--C5--N7--H7}: 180\textdegree (H7 in imidazole plane)
+\end{itemize}
+\item Rename the residue to \texttt{8OG} (or \texttt{8OG3}/\texttt{8OG5}
+if it is the 3$'$ or 5$'$ terminus).
+\item Write the modified structure to PDB.
+\item Append \texttt{CONECT} records for all intra-residue bonds of 8OG
+\emph{and} for the inter-residue O3$'$--P backbone bonds spanning the
+modified residue. This is essential because OpenMM's
+\texttt{createStandardBonds()} routine builds bonds only for residues
+named in its built-in standard table; for any non-standard name it
+silently skips both the residue's internal topology \emph{and} its
+inter-residue backbone bonds. Without the explicit CONECT records,
+\texttt{ForceField.createSystem()} fails with the misleading message
+``\emph{atoms match 8OG, but the bonds are different}''.
+\end{enumerate}
+
+\paragraph{NeRF algorithm.}
+The NeRF subroutine takes three known atom positions $\mathbf{a},
+\mathbf{b}, \mathbf{c}$ and three internal coordinates (bond length $b$,
+bond angle $\theta$, dihedral $\phi$), and returns the position of a
+new atom $\mathbf{d}$ such that
+$|\mathbf{c}-\mathbf{d}| = b$,
+$\angle(\mathbf{b}, \mathbf{c}, \mathbf{d}) = \theta$, and
+$\text{dihedral}(\mathbf{a}, \mathbf{b}, \mathbf{c}, \mathbf{d}) = \phi$.
+The implementation in \texttt{ptm\_builder.py} is a 7-line numpy
+function that constructs the local frame at $\mathbf{c}$.
+
+\paragraph{Reproduction.}
+\begin{lstlisting}[language=bash]
+python -c "
+import sys; sys.path.insert(0, 'd:/all_atom/app')
+from ptm_builder import apply_ptm
+pdb = apply_ptm('output/4BS2_WT_MD/4BS2_prepared.pdb',
+                 chain_id='B', resnum=3, ptm_code='8OG')
+open('output/4BS2_8OG_G3_MD/4BS2_8OG_G3.pdb','w').write(pdb)
+"
+\end{lstlisting}
+
+\subsection{File outputs}
+After preparation, two files are used as the starting structure of all
+subsequent simulations:
+
+\begin{tabular}{ll}
+\toprule
+\texttt{output/4BS2\_WT\_MD/4BS2\_prepared.pdb} & 3164 atoms; canonical RRM--RNA \\
+\texttt{output/4BS2\_8OG\_G3\_MD/4BS2\_8OG\_G3.pdb} & 3165 atoms; G3 $\rightarrow$ 8OG (--H8 +O8 +H7) \\
+\bottomrule
+\end{tabular}
+
+% =============================================================================
+\section{Simulation protocol}
+\label{sec:run}
+
+The simulation protocol is identical for the preliminary 10\,ns runs
+(Section~\ref{sec:run:short}) and the production 100\,ns multi-replica
+runs (Section~\ref{sec:run:long}); only the production length and the
+random seed differ.
+
+\subsection{Force-field stack}
+\begin{lstlisting}[language=python]
+ff = ForceField('amber14/protein.ff14SB.xml',     # protein
+                'amber14/RNA.OL3.xml',             # RNA
+                'amber14/tip3p.xml',               # water
+                'app/ff_custom/8OG_RNA_amber.xml') # 8OG (only for variant)
+\end{lstlisting}
+
+\subsection{Solvation}
+\texttt{Modeller.addSolvent} with:
+\begin{itemize}[leftmargin=*]
+\item Padding: 1.0\,nm (cubic box; box size scales with structure)
+\item Ionic strength: 0.15\,M
+\item Cation: Na$^{+}$; anion: Cl$^{-}$
+\item Total system: $\sim$51\,407 atoms (WT) / $\sim$51\,408 (8OG, +1 atom)
+\end{itemize}
+
+\subsection{Energy minimisation and equilibration}
+\begin{enumerate}[leftmargin=*]
+\item Energy minimisation: \texttt{minimizeEnergy(maxIterations=1000)}.
+\item NVT equilibration: 100\,ps.
+LangevinMiddleIntegrator (300\,K, $\gamma = 1$\,ps$^{-1}$, dt =
+4\,fs, hydrogen mass repartitioning to 1.5\,amu).
+PME with 1.2\,nm cutoff. HBonds constraints. State logged every 500
+steps to \texttt{nvt.log}.
+\item NPT equilibration: 100\,ps. As above, plus
+MonteCarloBarostat (1\,atm, 300\,K). State logged every 500 steps to
+\texttt{npt.log}.
+\end{enumerate}
+
+\subsection{Production}
+\label{sec:run:long}
+\begin{itemize}[leftmargin=*]
+\item Length: 100\,ns (25\,000\,000 steps at 4\,fs).
+\item Trajectory: \texttt{DCDReporter('traj.dcd', 5000)}, i.e.\ a frame
+every 20\,ps, $\sim$5000 frames per replica, $\sim$3.0 GB per file.
+\item State log: every 5000 steps to \texttt{md.log}.
+\item Final checkpoint saved to \texttt{final.chk}.
+\item Hardware: NVIDIA A100, mixed precision; speed $\sim$470\,ns/day,
+wall-clock 5\,h per 100\,ns replica.
+\end{itemize}
+
+\subsection{Replica generation}
+The script \texttt{scripts/gen\_replicas.py} generates 6 directories
+(3 WT + 3 8OG), each with its own \texttt{run\_openmm.py} and
+\texttt{sub.sh}. Replicas differ in the integer \emph{seed} ($1, 2,
+\dots, 6$) which is used at three places to ensure independent samples:
+
+\begin{lstlisting}[language=python]
+random.seed(seed)                                  # Python RNG, used by Modeller
+integrator.setRandomNumberSeed(seed)               # Langevin thermostat noise
+sim.context.setVelocitiesToTemperature(300*K, seed) # initial velocities
+barostat.setRandomNumberSeed(seed)                 # MC barostat
+\end{lstlisting}
+
+\subsection{Slurm submission script}
+\begin{lstlisting}[language=bash,caption={\texttt{sub.sh} (one per
+replica)}]
+#!/bin/bash
+#SBATCH --time=24:00:00
+#SBATCH --partition=graphic
+#SBATCH --constraint="gpu"
+#SBATCH --gres=gpu:a100:1
+#SBATCH --cpus-per-task=10
+#SBATCH --mem=225000
+#SBATCH --job-name="4BS2_<system>_r<n>"
+#SBATCH --output=./%j.out
+#SBATCH --error=./%j.err
+
+set -e
+module purge
+module load cuda/12.5
+source "$(conda info --base)/etc/profile.d/conda.sh"
+conda activate allatom
+python ./run_openmm.py
+\end{lstlisting}
+
+To submit one replica:
+\begin{lstlisting}[language=bash]
+cd /data/biophys/carolinge/clawork/37_OXR/replicas/4BS2_WT_r1
+sbatch sub.sh
+\end{lstlisting}
+
+\subsection{Output files per replica}
+After a successful run, the directory contains:
+\begin{tabular}{lp{8.6cm}}
+\toprule
+\texttt{4BS2\_<sys>.pdb} & starting structure (input) \\
+\texttt{8OG\_RNA\_amber.xml} & custom FF (only for 8OG variant) \\
+\texttt{run\_openmm.py} & simulation driver (input) \\
+\texttt{sub.sh} & submission script (input) \\
+\texttt{solvated.pdb} & solvated topology written before MD; matches DCD atom order; required for analysis \\
+\texttt{nvt.log}, \texttt{npt.log} & equilibration state logs \\
+\texttt{md.log} & production state log; contains progress \% used by analysis script \\
+\texttt{traj.dcd} & production trajectory (5000 frames, $\sim$3 GB) \\
+\texttt{final.chk} & checkpoint at end of production \\
+\bottomrule
+\end{tabular}
+
+\subsection{Resuming a failed replica}
+A replica that died mid-production (for example because of a
+filesystem-quota error) cannot be resumed mid-run because no
+intermediate checkpoint is written. Restart from scratch:
+
+\begin{lstlisting}[language=bash]
+cd /data/biophys/carolinge/clawork/37_OXR/replicas/4BS2_8OG_r3
+rm -f traj.dcd md.log nvt.log npt.log solvated.pdb final.chk *.out *.err
+sbatch sub.sh
+\end{lstlisting}
+
+% =============================================================================
+\section{Analysis}
+\label{sec:anal}
+
+All analysis scripts are kept under \texttt{scripts/} on the
+workstation and are deployed to the cluster's project root for
+execution against trajectories on \texttt{/data}.
+
+\subsection{Single-trajectory binding analysis}
+\texttt{scripts/analyze\_binding.py} computes, on a per-frame basis:
+RNA RMSD vs.\ frame 0; total heavy-atom contacts ($<4\,\si{\angstrom}$)
+between protein and RNA; protein--RNA centre-of-mass distance;
+G3-specific contacts; G3 base polar contacts ($<3.5\,\si{\angstrom}$,
+proxy for hydrogen bonds). It also accumulates a per-residue
+contact-frequency map. Inputs: a topology PDB (must match the DCD atom
+count) and a trajectory file. Outputs: \texttt{<prefix>\_cv.csv,
+\_contact\_map.csv, \_summary.txt} and PNG plots.
+
+The topology PDB must be the \texttt{solvated.pdb} written by
+\texttt{run\_openmm.py}, not the unsolvated starting file --- the DCD
+contains all 51\,407+ atoms.
+
+\subsection{Single-trajectory RMSF}
+\texttt{scripts/analyze\_rmsf.py} aligns on protein C$\alpha$ and
+computes per-residue heavy-atom RMSF for both chains.
+
+\subsection{Multi-replica analysis with partial-coverage averaging}
+\label{sec:anal:multi}
+\texttt{scripts/analyze\_replicas.py} is the main workhorse for the
+100\,ns multi-replica analysis. Key features:
+
+\begin{itemize}[leftmargin=*]
+\item Accepts an arbitrary number of \texttt{--label / --replicas}
+pairs.
+\item Loads each replica's \texttt{solvated.pdb} + \texttt{traj.dcd}
+independently. Trajectories of unequal length are handled by NaN-padding
+when stacked, so that at each time-point the cross-replica mean and SEM
+are computed only over replicas that have actually reached that
+time-point.
+\item Applies a \emph{minimum-image PBC correction} relative to the
+protein centre of mass before computing RNA RMSF and RMSD; this is
+necessary because RNA atoms can wander to a periodic image, which would
+otherwise inflate RMSF artifactually.
+\item Output files: \texttt{multi\_per\_replica.json} (per-replica means),
+\texttt{multi\_timeseries.npz/.png}, \texttt{multi\_rmsf.npz/.png}, and
+\texttt{multi\_summary.txt}.
+\end{itemize}
+
+\paragraph{Avoiding the active-trajectory race condition.}
+Reading a DCD file that is concurrently being written by an active MD
+job will cause the analysis script to die silently mid-frame. The
+analysis must therefore exclude any replica whose simulation has not
+yet finished. A simple check is whether the corresponding Slurm job is
+still in the queue:
+\begin{lstlisting}[language=bash]
+squeue -u carolinge | grep 4BS2
+\end{lstlisting}
+Only fully completed replicas should be passed to
+\texttt{analyze\_replicas.py}.
+
+\paragraph{Reproduction.}
+\begin{lstlisting}[language=bash]
+cd /data/biophys/carolinge/clawork/37_OXR
+nohup conda run -n allatom python analyze_replicas.py \
+  --label WT  --replicas replicas/4BS2_WT_r1 \
+                          replicas/4BS2_WT_r2 \
+                          replicas/4BS2_WT_r3 \
+  --label 8OG --replicas replicas/4BS2_8OG_r1 \
+                          replicas/4BS2_8OG_r2 \
+                          replicas/4BS2_8OG_r3 \
+  --out anal_gyrate/multi --stride 5 \
+  > /tmp/multi.log 2>&1 &
+\end{lstlisting}
+
+The \texttt{--stride 5} option subsamples every 5th frame from each
+trajectory (1000 effective frames per replica) and reduces wall time
+to $\sim$5 minutes for 6 replicas.
+
+\subsection{Plot generation}
+\texttt{scripts/compare\_wt\_8og.py} (10\,ns single-replica figures) and
+\texttt{scripts/plot\_rmsf.py} (single-replica RMSF) read the CSVs/JSON
+emitted by the analysis scripts and write the corresponding PNGs into
+\texttt{output/analysis/}.
+
+% =============================================================================
+\section{Step-by-step reproduction recipe}
+\label{sec:repro}
+
+This section is a single-command-per-step recipe to recreate every
+file from scratch.
+
+\subsection{One-time setup (workstation)}
+
+\begin{lstlisting}[language=bash]
+# 1. Clone repository (already in place at d:/all_atom)
+# 2. Create conda environment
+conda env create -f environment_server.yml -n allatom
+
+# 3. Verify the custom force field loads
+conda run -n allatom python scripts/validate_8OG_ff.py
+\end{lstlisting}
+
+\subsection{One-time setup (cluster)}
+
+\begin{lstlisting}[language=bash]
+ssh bio
+# 4. Mirror the conda environment
+conda env create -f environment_server.yml -n allatom
+mkdir -p /data/biophys/carolinge/clawork/37_OXR
+ln -s /data/biophys/carolinge/clawork/37_OXR ~/work/37_OXR
+\end{lstlisting}
+
+\subsection{Generate starting structures}
+
+\begin{lstlisting}[language=bash]
+# Workstation
+cd d:/all_atom
+conda run -n allatom python scripts/gen_4bs2_md.py
+# Outputs:
+#   output/4BS2_WT_MD/4BS2_prepared.pdb
+#   output/4BS2_8OG_G3_MD/4BS2_8OG_G3.pdb (CONECT records included)
+\end{lstlisting}
+
+\subsection{Generate replica directories}
+
+\begin{lstlisting}[language=bash]
+conda run -n allatom python scripts/gen_replicas.py
+# Outputs 6 directories under output/4BS2_{WT,8OG}_r{1,2,3}/
+\end{lstlisting}
+
+\subsection{Upload to cluster and submit}
+
+\begin{lstlisting}[language=bash]
+# Workstation -> cluster
+scp -r output/4BS2_*_r? bio:/data/biophys/carolinge/clawork/37_OXR/replicas/
+ssh bio
+cd /data/biophys/carolinge/clawork/37_OXR/replicas
+for d in 4BS2_*_r*; do
+  dos2unix $d/sub.sh $d/run_openmm.py 2>/dev/null
+  ( cd $d && sbatch sub.sh )
+done
+squeue -u $USER
+\end{lstlisting}
+
+\subsection{Wait, then analyse}
+
+\begin{lstlisting}[language=bash]
+# Wait until squeue -u $USER returns no 4BS2_* jobs.
+cd /data/biophys/carolinge/clawork/37_OXR
+nohup conda run -n allatom python analyze_replicas.py \
+  --label WT  --replicas replicas/4BS2_WT_r{1,2,3} \
+  --label 8OG --replicas replicas/4BS2_8OG_r{1,2,3} \
+  --out anal_gyrate/multi --stride 5 \
+  > /tmp/multi.log 2>&1 &
+
+# Download outputs to workstation:
+scp 'bio:/data/biophys/carolinge/clawork/37_OXR/anal_gyrate/multi_*' \
+    d:/all_atom/output/analysis/
+
+# Compile the report
+cd d:/all_atom/docs
+pdflatex -interaction=nonstopmode 4BS2_8OG_report.tex
+pdflatex -interaction=nonstopmode 4BS2_8OG_report.tex   # citations
+\end{lstlisting}
+
+% =============================================================================
+\section{Known issues and gotchas}
+\label{sec:gotchas}
+
+\begin{enumerate}[leftmargin=*]
+\item \textbf{Disk quota on \texttt{/home}.}
+80 GB user quota; a single 100 ns trajectory is $\sim$3 GB. All
+production output must live on \texttt{/data}. Failure to do so
+manifests as a Slurm job that exits without an error message after
+$\sim$40\,\% of production. The symlink trick in Section~\ref{sec:env}
+keeps the path \texttt{\textasciitilde/work/37\_OXR} usable while
+storing data on \texttt{/data}.
+
+\item \textbf{Race condition on active trajectories.}
+\texttt{analyze\_replicas.py} will silently die mid-frame if it reads
+a DCD that is being concurrently written by an active MD job. Always
+verify with \texttt{squeue} that all replicas are complete before
+running the multi-replica analysis. (The script uses NaN-padding to
+handle replicas of \emph{differing} lengths, but only after they have
+finished writing.)
+
+\item \textbf{CONECT records are essential for non-standard residues.}
+OpenMM's \texttt{createStandardBonds()} bond-detection routine skips
+any residue whose name is not in its built-in standard table. For 8OG
+this means \emph{none} of the residue's intra-residue bonds will be
+created, and the inter-residue O3$'$--P backbone bonds spanning the
+modified residue will also be silently dropped. The result is an
+opaque error message at \texttt{ForceField.createSystem()} time:
+\emph{``atoms match 8OG, but the bonds are different''}. The
+\texttt{ptm\_builder.py} script writes explicit CONECT records for
+both the intra-residue bonds (Section~\ref{sec:prep:nerf}) and the
+inter-residue backbone bonds (function
+\texttt{\_add\_backbone\_conect}). Do not modify the output PDB without
+preserving these CONECT records.
+
+\item \textbf{Windows-style line endings break Slurm.}
+Submission scripts edited or copied via Windows utilities can pick up
+CRLF line endings, which cause sbatch to reject the script with a
+``DOS line breaks'' error. Run \texttt{dos2unix} on every \texttt{*.sh}
+and \texttt{*.py} after upload.
+
+\item \textbf{CUDA driver / PTX version mismatch.}
+\texttt{\$ nvidia-smi} on the login node may report a different driver
+version than what is installed on the GPU compute nodes. If
+\texttt{Platform.getPlatformByName('CUDA')} succeeds but a subsequent
+\texttt{Simulation()} call fails with ``CUDA\_ERROR\_UNSUPPORTED\_PTX\_VERSION'',
+fall back to OpenCL or CPU automatically (the
+\texttt{run\_openmm.py} template includes such a fallback loop).
+
+\item \textbf{PBC unwrapping for RNA RMSF.}
+A naive RMSF computation will report values of $\sim$25--40\,\si{\angstrom}
+for any RNA atoms that hop to a periodic image. \texttt{analyze\_replicas.py}
+applies a minimum-image correction relative to the protein centre of mass
+before storing positions. Without this correction, RNA RMSF is
+uninterpretable.
+\end{enumerate}
+
+% =============================================================================
+\renewcommand*{\bibfont}{\small}
+\begin{thebibliography}{9}
+
+\bibitem[Aduri et~al.(2007)]{Aduri2007}
+Aduri R., Psciuk B.T., Saro P., Taniga H., Schlegel H.B., SantaLucia J.
+\newblock {AMBER force field parameters for the naturally occurring modified
+nucleosides in RNA}.
+\newblock \emph{J. Chem. Theory Comput.} \textbf{3}, 1464--1475 (2007).
+
+\bibitem[Lukavsky et~al.(2013)]{Lukavsky2013}
+Lukavsky P.J., Daujotyte D., Tollervey J.R., Ule J., Stuani C., Buratti E.,
+Baralle F.E., Damberger F.F., Allain F.H.-T.
+\newblock {Molecular basis of UG-rich RNA recognition by the human splicing
+factor TDP-43}.
+\newblock \emph{Nat. Struct. Mol. Biol.} \textbf{20}, 1443--1449 (2013).
+
+\bibitem[P\'erez et~al.(2007)]{Perez2007}
+P\'erez A., March\'an I., Svozil D., \v{S}poner J., Cheatham T.E.,
+Laughton C.A., Orozco M.
+\newblock {Refinement of the AMBER force field for nucleic acids:
+improving the description of $\alpha$/$\gamma$ conformers}.
+\newblock \emph{Biophys. J.} \textbf{92}, 3817--3829 (2007).
+
+\end{thebibliography}
+
+\end{document}

@@ -1,0 +1,58 @@
+# project_RRM ver_2 conda environment
+# Install:  conda env create -f project_RRM/environment_v2.yml
+# Activate: conda activate allatom_v2
+#
+# 与根目录的 environment.yml（app/ 用的）独立，名字不同避免冲突。
+
+name: allatom_v2
+
+channels:
+  - conda-forge
+  - defaults
+
+dependencies:
+  - python=3.11
+
+  # MD engine
+  - openmm>=8.1
+  - openmmforcefields>=0.12   # 提供 amber14, charmm36 的 OpenMM XML
+
+  # Structure preparation + parameter conversion
+  - pdbfixer
+  - parmed                    # 用于 modxna mol2/frcmod → OpenMM XML 转换
+  # - ambertools              # Linux only — 用于 tleap 路线，Windows 上不装
+
+  # Trajectory analysis
+  - mdanalysis>=2.7
+  - mdtraj>=1.9
+
+  # Numerics
+  - numpy
+  - scipy
+  - pandas
+
+  # Visualization
+  - matplotlib
+  - nglview
+  - jupyterlab
+  - ipywidgets
+
+  # Remote transfer
+  - paramiko
+  - fabric
+
+  # Utilities
+  - tqdm
+  - rich
+  - pyyaml
+  - click
+
+  # Dev tools
+  - pytest
+  - black
+  - pip
+
+  # Optional future-proofing for self-derived RESP charges (DFT pipeline)
+  # - psi4
+  # - pip:
+  #     - psiresp

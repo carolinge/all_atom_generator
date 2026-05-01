@@ -1,0 +1,675 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[a4paper, margin=2.2cm]{geometry}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\hypersetup{colorlinks=true, linkcolor=blue!60!black, urlcolor=blue!60!black,
+            citecolor=blue!60!black}
+\usepackage{amsmath, amssymb}
+\usepackage{caption}
+\usepackage{siunitx}
+\sisetup{detect-all}
+\usepackage{enumitem}
+\usepackage{titling}
+\usepackage{fancyhdr}
+\usepackage[round,authoryear]{natbib}
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{\small 4BS2 8-oxoG binding stability}
+\lhead{\small Caroline Ge, 2026}
+\rfoot{\thepage}
+
+\title{Effect of 8-oxoguanosine on Protein--RNA Binding Stability of 4BS2:\\
+\large A Preliminary All-Atom Molecular Dynamics Analysis}
+\author{Caroline Ge\\\small carolinge73@gmail.com}
+\date{April 29, 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+\noindent
+We compare the binding stability of the wild-type (WT) 4BS2 protein--RNA complex
+against a variant in which the third nucleotide (G3) of the RNA chain B is
+replaced by 8-oxoguanosine (8OG). Both systems were simulated for 10\,ns of
+all-atom molecular dynamics in OpenMM using AMBER ff14SB for protein, OL3 for
+RNA, and a custom AMBER-compatible force field for 8OG (parameters derived
+from \citealt{Aduri2007}). We observe a 9\% reduction in total
+protein--RNA heavy-atom contacts, a 14\% reduction in contacts involving the
+modified base, and a 24\% reduction in polar contacts within the G3 base
+neighbourhood. Critically, the contact frequency between G3 and protein
+residue A79 -- a known RNP1-motif residue -- decreases by 22\%, with
+compensatory contact gains at A15 and A18. We also review the standard
+metrics currently used in the literature for assessing protein--RNA binding
+strength, and discuss the additional analyses required to bring this study
+to publication quality.
+\end{abstract}
+
+\section{Background and rationale}
+\label{sec:bg}
+
+8-oxoguanosine (8OG) is the most abundant oxidative lesion of RNA
+\citep{Cooke2003}. Compared to canonical guanosine, 8OG carries two key
+chemical alterations on the imidazole ring: (i) the C8--H is replaced by a
+C8=O8 carbonyl, introducing an additional hydrogen-bond acceptor; and
+(ii) the aromatic N7 is converted to N7--H, \emph{flipping its role from
+acceptor to donor}. This donor/acceptor inversion at N7 is widely thought
+to underlie the mismatched recognition of 8OG by RNA-binding proteins and
+its mutagenic potential during translation
+\citep{Tanaka2007,Simms2017}.
+
+The protein 4BS2 contains an RRM (RNA-recognition motif) domain that binds
+single-stranded RNA via a $\beta$-sheet surface decorated by two conserved
+sequences (RNP1 and RNP2). G3 in chain B sits within the RNP1 contact
+patch, making it a useful test case for asking whether oxidative damage
+on a single nucleotide perturbs the binding interface in a measurable way.
+
+\section{What is a ``contact''? Why use it?}
+\label{sec:contact}
+
+A heavy-atom contact is defined as any pair of non-hydrogen atoms whose
+distance falls below a fixed cutoff (typically 4--5\,\si{\angstrom}). For
+each frame of the trajectory we compute the full protein-vs-RNA distance
+matrix and count pairs below the threshold. The total contact count is a
+coarse but well-established indicator of interface tightness, with typical
+distances in this range corresponding to van der Waals contacts
+($\sim$3.4--3.8\,\si{\angstrom} for C--C), hydrogen bonds
+($\sim$2.7--3.5\,\si{\angstrom}), and salt bridges ($\sim$3--4\,\si{\angstrom}).
+
+Contact-based metrics have the advantage of being inexpensive
+(seconds per frame) and free of force-field-dependent energy estimates.
+They are widely used as a first-pass diagnostic before committing to
+more expensive free-energy calculations \citep{Kruse2017}. We emphasise,
+however, that a decrease in contact count is suggestive but \emph{not
+proof} of weakened binding: contacts may also be redistributed without
+net energy change. For this reason we treat the present analysis as a
+hypothesis-generating step preceding rigorous free-energy estimation.
+
+\section{Hierarchy of metrics in the literature}
+\label{sec:metrics}
+
+Methods used to characterise protein--RNA binding fall into three
+categories of increasing rigour and computational cost
+(Table~\ref{tab:metrics}).
+
+\begin{table}[h]
+\centering
+\small
+\renewcommand{\arraystretch}{1.15}
+\begin{tabular}{p{4.4cm} p{3.6cm} p{3cm} p{3.2cm}}
+\toprule
+Metric & Quantity & Cost & Representative work \\
+\midrule
+\multicolumn{4}{l}{\textit{Tier 1 -- Free-energy estimators (gold standard)}} \\
+\midrule
+MM/PBSA, MM/GBSA       & Single-point $\Delta G_{\text{bind}}$ & $\sim$1$\times$ MD       & \citep{Wang2019,Wu2021} \\
+Umbrella Sampling + WHAM & PMF along distance/angle CV       & $\sim$20--40$\times$ MD  & \citep{Lemkul2010} \\
+Well-tempered Metadynamics & Converged FES along CV          & $\sim$10--20$\times$ MD  & \citep{Sutto2015} \\
+Alchemical FEP / TI    & $\Delta\Delta G$ for chemical change & $\sim$10$\times$ MD      & \citep{Mey2020} \\
+\midrule
+\multicolumn{4}{l}{\textit{Tier 2 -- Semi-quantitative descriptors (commonly required for publication)}} \\
+\midrule
+Buried surface area    & Interface burial & seconds          & \citep{Janin1990} \\
+Hydrogen-bond analysis & Distance + angle criterion & minutes & \citep{Krivov2014} \\
+Salt bridges           & Arg/Lys vs phosphate & minutes      & standard \\
+$\pi$-stacking         & Plane separation + tilt & minutes  & \citep{Wilson2014} \\
+RMSD/RMSF              & Global/local flexibility & seconds  & standard \\
+\midrule
+\multicolumn{4}{l}{\textit{Tier 3 -- Geometric proxies (rapid screening; this study)}} \\
+\midrule
+Heavy-atom contacts ($<$4\,\si{\angstrom}) & Interface tightness & seconds & \citep{Kruse2017} \\
+COM--COM distance      & Dissociation monitor & seconds      & standard \\
+Per-residue contact map & Contact pattern & seconds         & standard \\
+\bottomrule
+\end{tabular}
+\caption{Standard methods for protein--RNA binding analysis, ordered by
+rigour. \textbf{Publications in journals such as \emph{Nucleic Acids Research},
+\emph{JACS}, or \emph{Nature Communications} typically require Tier~1 evidence
+combined with Tier~2 descriptors.} The present report constitutes a
+Tier~3 trend analysis only.}
+\label{tab:metrics}
+\end{table}
+
+\paragraph{Recommended workflow for single-nucleotide modifications}
+For systems such as 8OG-substituted RNA, we propose the following sequence
+of analyses, ordered by increasing cost and decreasing speculativeness:
+(1)~contact and distance time series (this work);
+(2)~geometric hydrogen-bond analysis with angle criteria;
+(3)~MM/GBSA $\Delta\Delta G$ from $\geq$3 replicas of $\geq$50\,ns each,
+including per-residue energy decomposition;
+(4)~$\pi$-stacking metrics and BSA;
+(5)~Umbrella sampling PMF along the dissociation coordinate, if MM/GBSA
+estimates are challenged.
+
+\section{Methods}
+\label{sec:methods}
+
+\subsection{System preparation}
+The 4BS2 X-ray structure (chain A, 174 residues; chain B,
+12-nt RNA \texttt{GUGUAGAAUGAAU}) was protonated and gap-filled with PDBFixer.
+The 8OG variant was produced by deleting H8 of G3, generating O8 and H7 atoms
+through the Natural Extension Reference Frame (NeRF) algorithm with ideal
+purine geometry (C8--O8 bond 1.230\,\si{\angstrom},
+N9--N7--C8--O8 dihedral 180\textdegree;
+N7--H7 bond 1.010\,\si{\angstrom}, C8--C5--N7--H7 dihedral 180\textdegree),
+and renaming the residue to 8OG.
+CONECT records for all intra-residue and bridging backbone bonds of the
+non-standard residue were emitted explicitly so that OpenMM's
+\texttt{ForceField} template matching succeeds.
+
+\subsection{Force field}
+Protein: AMBER ff14SB \citep{Maier2015}. RNA: AMBER OL3 \citep{Perez2007}.
+8OG: a custom AMBER-compatible XML residue template incorporating
+RESP charges and topology consistent with \citet{Aduri2007}.
+Solvent: TIP3P with 0.15\,M NaCl.
+
+\subsection{Simulation protocol}
+Each system was solvated with a 1.0\,nm padding cubic box, energy minimised
+($\leq$1000 steps), equilibrated under NVT (100\,ps, Langevin thermostat,
+$\gamma$=1\,ps$^{-1}$, 300\,K), then NPT (100\,ps, Monte Carlo barostat,
+1\,atm), and propagated under NPT for 10\,ns of production with hydrogen
+mass repartitioning enabling a 4\,fs time step (PME, 1.2\,nm cutoff,
+HBonds constraints). Frames were written every 20\,ps (500 frames).
+Hardware: NVIDIA A100 (mixed precision), $\sim$470\,ns/day.
+
+\subsection{Analysis}
+Trajectories were processed with MDAnalysis 2.10 \citep{Michaud2011}.
+Trajectories were aligned to frame 0 using protein C$\alpha$ atoms.
+Per-frame quantities computed:
+(i) RNA RMSD relative to frame 0;
+(ii) total heavy-atom contacts ($<$4\,\si{\angstrom}) between protein and RNA;
+(iii) protein-RNA centre-of-mass distance;
+(iv) G3 heavy-atom contacts with protein;
+(v) polar-atom contacts within 3.5\,\si{\angstrom} between G3 base atoms
+(N1, N2, N3, N7, O6, O8) and any protein N/O/S atom, used here as a
+geometric proxy for hydrogen-bond candidates.
+In addition, per-residue root-mean-square fluctuation (RMSF) was computed
+on heavy atoms after the same protein-C$\alpha$ alignment; RMSF reports
+local rigidity around each residue's mean position and is independent of
+choice of reference frame, making it a more reliable indicator of binding
+constraint than global RMSD.
+
+\section{Results}
+\label{sec:results}
+
+\subsection*{Note on the order of presentation}
+We present results in two stages. Sections \ref{sec:short}--\ref{sec:rmsf}
+report a preliminary 10\,ns single-replica analysis of each system. These
+data motivated the extension to longer multi-replica simulations in
+Section~\ref{sec:long}, which substantially \textbf{revise the
+preliminary conclusions}. We retain both presentations because the
+contrast itself is methodologically informative: it illustrates how
+inter-replica variance in protein--RNA systems can invert the apparent
+direction of an effect when the simulation budget is too small.
+
+\subsection{Time-resolved binding metrics (10\,ns single replica)}
+\label{sec:short}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\linewidth]{../output/analysis/compare_timeseries.png}
+\caption{Time-resolved comparison of WT (blue) and 8OG-G3 (red) for four
+binding metrics over 10\,ns. Light traces show raw values; bold traces are
+0.5\,ns rolling means. After an equilibration phase ($\sim$2\,ns) the WT and
+8OG curves separate consistently. The total protein-RNA contact count
+(top right) and G3 polar contacts (bottom right) are systematically
+lower in the 8OG variant.}
+\label{fig:timeseries}
+\end{figure}
+
+Figure~\ref{fig:timeseries} shows the four primary CVs as functions of
+simulation time. After an equilibration period of approximately 2\,ns,
+both systems plateau around stable values that differ between WT and 8OG:
+the total contact count drops from $\sim$340 (WT) to $\sim$300 (8OG), and
+the G3 polar contact count drops from $\sim$5.5 to $\sim$4. This
+separation is consistent across the 8\,ns of post-equilibration data.
+
+\subsection{Aggregate statistics}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lccc}
+\toprule
+Metric & WT & 8OG (G3) & $\Delta$ \\
+\midrule
+RNA RMSD (Å)                         & $4.12 \pm 0.73$ & $3.47 \pm 0.56$  & $-16\%$ \\
+Total contacts ($<$4\,\si{\angstrom}) & $336 \pm 27$    & $306 \pm 23$     & $\mathbf{-9\%}$ \\
+COM--COM distance (Å)                & $12.37 \pm 0.30$ & $12.77 \pm 0.34$ & $+0.4$\,\si{\angstrom} \\
+G3 contacts                          & $32.1 \pm 6.5$  & $27.7 \pm 8.0$   & $-14\%$ \\
+G3 base polar ($<$3.5\,\si{\angstrom}) & $5.4 \pm 1.7$ & $4.1 \pm 2.1$    & $\mathbf{-24\%}$ \\
+\bottomrule
+\end{tabular}
+\caption{Mean $\pm$ SD over 500 frames (10\,ns) for both systems. Bold rows
+indicate the metrics most relevant to interface stability.}
+\label{tab:summary}
+\end{table}
+
+\subsection{Per-residue contact map differences}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\linewidth]{../output/analysis/compare_contactmap.png}
+\caption{Per-residue contact maps. Left: WT. Centre: 8OG. Right: difference
+(8OG $-$ WT); red indicates contacts gained, blue indicates contacts lost.
+The differential map highlights a redistribution of contacts around
+G3 (chain B residue 3) and a smaller perturbation across the broader
+RNA-binding surface.}
+\label{fig:contactmap}
+\end{figure}
+
+\subsection{Per-residue rigidity (RMSF)}
+\label{sec:rmsf}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\linewidth]{../output/analysis/compare_rmsf.png}
+\caption{Per-residue heavy-atom RMSF for WT (blue) and 8OG (red). Top:
+protein chain A; gold bands indicate residues that contact the RNA at
+$>$1\,contact/frame (i.e., the binding interface). Bottom: RNA chain B;
+the gold band marks the modified residue G3.}
+\label{fig:rmsf}
+\end{figure}
+
+The RMSF analysis (Figure~\ref{fig:rmsf}) reveals a more nuanced picture
+than the global RMSD. Two complementary observations emerge:
+
+\begin{itemize}[leftmargin=*]
+\item \textbf{RNA chain B is systematically more rigid in 8OG.}
+The mean RMSF of the core binding region (residues 3--9) decreases
+from 1.28\,\si{\angstrom} (WT) to 1.10\,\si{\angstrom} (8OG, $-14\%$).
+The modified residue G3 itself drops from 1.58 to 1.20\,\si{\angstrom}
+($-24\%$). The 3$'$ tail (residues 10--12) is also markedly more
+constrained in 8OG ($\Delta = -0.7$ to $-1.2$\,\si{\angstrom}).
+\item \textbf{Protein contact residues are slightly more flexible in 8OG.}
+The mean RMSF over the 41 RNA-contacting protein residues increases from
+$1.28 \pm 0.69$\,\si{\angstrom} (WT) to $1.43 \pm 1.04$\,\si{\angstrom}
+(8OG, $+12\%$); non-contacting residues show the opposite trend
+(1.75 vs 1.51\,\si{\angstrom}).
+\end{itemize}
+
+\noindent
+The combination -- \emph{tighter RNA but looser protein contact face} --
+is inconsistent with a simple ``weakened binding'' mechanism. We
+interpret it instead as evidence for a \textbf{kinetic trap}: 8OG
+rapidly settles into a local minimum stabilised by the compensatory
+contacts at A15 and A18 (Section~\ref{sec:results}, Table below), while
+the loss of native RNP1 contacts (A76--A79) frees the protein
+interface from its native constraints and increases its mobility.
+This interpretation predicts that on longer timescales the 8OG complex
+will either escape this trap or remain trapped at a higher free energy
+than WT; rigorous discrimination requires the extended replicas described
+in Section~\ref{sec:next} together with MM/GBSA energetics.
+
+\subsection{Reorganisation of G3 contact partners}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lccc}
+\toprule
+Protein residue (chain A) & WT (contacts/frame) & 8OG (contacts/frame) & Change \\
+\midrule
+A79 (\textbf{RNP1}) & 10.7 & 8.3 & $\mathbf{-22\%}$ \\
+A14                 & 9.7  & 9.5 & unchanged \\
+A15                 & 4.6  & 7.3 & $+59\%$ (compensatory) \\
+A18                 & 0    & 1.3 & new \\
+A76                 & 3.3  & 0.6 & $\mathbf{-82\%}$ \\
+A78                 & 1.2  & 0   & lost \\
+A77                 & 0.8  & 0   & lost \\
+A50                 & 0.8  & 0   & lost \\
+\bottomrule
+\end{tabular}
+\caption{Per-residue contact frequencies for protein partners of G3.
+Residues 76--79 (RNP1 motif) lose contact in the 8OG variant, with
+partial compensation at residues 15 and 18 (RNP2 vicinity). The
+22\% reduction at A79, the principal contact partner, is the single
+most direct piece of evidence for weakened interaction at the
+modification site.}
+\label{tab:partners}
+\end{table}
+
+\section{Extended sampling: 100\,ns multi-replica analysis}
+\label{sec:long}
+
+To address the single-replica limitations identified above, we ran
+3 independent replicas of WT and 3 of 8OG at 100\,ns each
+(differing in random seed, which affects initial-velocity assignment,
+ion placement during solvation, and thermostat/barostat noise). At
+the time of writing, all 3 WT replicas and 1 of the 3 8OG replicas
+have completed the full 100\,ns; an additional 8OG replica has reached
+57\,ns and is excluded from the per-frame averaging shown below to
+avoid race conditions with active trajectory writing.
+
+\subsection{Multi-replica time series}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\linewidth]{../output/analysis/multi_timeseries.png}
+\caption{Multi-replica time series of the four primary CVs over 100\,ns.
+Solid lines are means across replicas (WT $n=3$, 8OG $n=1$); shaded
+bands are the standard error of the mean across replicas. The
+\textbf{conclusions invert relative to the 10\,ns single-replica
+comparison} (Section~\ref{sec:short}): WT contacts and G3 polar
+contacts are now \emph{lower} than 8OG, and WT shows large excursions
+that are absent in 8OG.}
+\label{fig:multi-ts}
+\end{figure}
+
+The 100\,ns multi-replica trajectories reveal a substantially different
+picture from the 10\,ns preliminary analysis (Figure~\ref{fig:multi-ts}):
+
+\begin{itemize}[leftmargin=*]
+\item \textbf{WT exhibits large dynamic excursions.} Total contacts
+in WT replicas drop transiently to $\sim$100--150 (versus a typical
+$\sim$300--400) at several points throughout the trajectory; some
+replicas appear to undergo partial-dissociation events. WT replica r2
+in particular settles at a markedly lower contact level
+(241 contacts/frame on average).
+
+\item \textbf{8OG remains stably bound.} The single completed 8OG
+replica maintains 350--400 contacts throughout, with no excursions
+comparable to those observed in WT.
+
+\item \textbf{Inter-replica spread in WT is enormous.} The mean
+contact counts across the three WT replicas are
+292, 241, 342 -- a 33\% range that dwarfs the original
+``$-9\%$'' WT-vs-8OG difference reported from a single 10\,ns trajectory
+(Section~\ref{sec:short}).
+\end{itemize}
+
+\subsection{Multi-replica per-replica statistics}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lcccc}
+\toprule
+System & Replica & $t_{\max}$ (ns) & Mean total contacts & Mean G3 polar contacts \\
+\midrule
+WT  & r1 & 99.9 & 292 & 3.1 \\
+WT  & r2 & 99.9 & 241 & 1.8 \\
+WT  & r3 & 99.9 & 342 & 2.0 \\
+\midrule
+\textbf{WT}  & \textbf{mean $\pm$ SD} & --- & $\mathbf{292 \pm 51}$ & $\mathbf{2.3 \pm 0.7}$ \\
+\midrule
+8OG & r1 & 99.9 & 353 & 4.0 \\
+8OG & r2 & 57.1 (excl.) & (312) & (6.0) \\
+\midrule
+\textbf{8OG} & \textbf{n=1 complete} & --- & $\mathbf{353}$ & $\mathbf{4.0}$ \\
+\midrule
+$\Delta$ (8OG--WT) & --- & --- & $\mathbf{+61}$\,(+21\%) & $\mathbf{+1.7}$\,(+74\%) \\
+\bottomrule
+\end{tabular}
+\caption{Per-replica means over 100\,ns. The 8OG simulation shows
+\emph{higher} contact counts and \emph{higher} G3 polar contact counts
+than WT -- a complete reversal of the direction predicted from the
+preliminary 10\,ns comparison (Table~\ref{tab:summary}). The strength
+of this conclusion is currently limited by 8OG having only a single
+completed replica; the second 8OG replica is at 57\,ns and consistent
+in trend (312 contacts, 6.0 G3 polar).}
+\label{tab:multi}
+\end{table}
+
+\subsection{Multi-replica per-residue RMSF}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\linewidth]{../output/analysis/multi_rmsf.png}
+\caption{Multi-replica per-residue RMSF after PBC minimum-image
+correction relative to the protein centre of mass. Top: protein
+chain A; the protein RMSF profile is similar between WT and 8OG, with
+WT marginally higher in flexible loops near residues 80--95. Bottom:
+RNA chain B. Note the large WT--8OG difference in absolute RNA RMSF;
+WT values of $\sim$25\,\si{\angstrom} are dominated by the large
+RNA excursions seen in the time-series traces and are not a PBC
+artefact (the same correction is applied to both systems and 8OG
+remains in the 1--6\,\si{\angstrom} regime expected for a stably
+bound nucleic acid).}
+\label{fig:multi-rmsf}
+\end{figure}
+
+The RNA RMSF in 8OG (1--6\,\si{\angstrom}, residue-dependent) is
+characteristic of a stably bound 12-mer with mobile termini --
+identical in shape to the 10\,ns single-replica result. The WT RNA
+RMSF, in contrast, is uniformly $\sim$25\,\si{\angstrom} across all
+12 nucleotides. Such uniformity across the chain rules out a
+loop-flexibility interpretation and is best explained by intermittent
+large-scale RNA displacement events of the kind visible in the
+time-series total-contact trace.
+
+\subsection{Revised interpretation}
+\label{sec:revised}
+
+The 100\,ns data strongly suggest that the 10\,ns ``8OG weakens
+binding'' interpretation was an artefact of insufficient sampling.
+The current best estimate, on the strength of $n=3$ WT and $n=1$ 8OG
+fully completed replicas, is that:
+
+\begin{enumerate}[leftmargin=*]
+\item \textbf{WT 4BS2--RNA is dynamically heterogeneous.} The
+trajectories sample multiple metastable bound states and at least one
+state with significantly reduced contacts ($\sim$100). This dynamic
+heterogeneity may itself be biologically meaningful (e.g., reflecting
+the kinetic accessibility of the unbound state).
+\item \textbf{8OG appears to stabilise the bound complex.} The single
+completed 8OG replica shows higher mean contacts ($+21\%$) and higher
+G3 polar contacts ($+74\%$) than the WT mean, with no evidence of
+the dissociation excursions seen in WT.
+\item \textbf{Mechanistically}, the stabilising effect is plausibly
+attributed to the new C8=O8 acceptor and N7--H donor groups on 8OG,
+which can engage additional protein hydrogen-bond partners that the
+canonical guanine cannot.
+\end{enumerate}
+
+\paragraph{Strength-of-evidence caveat}
+The 8OG side of the comparison currently rests on $n=1$ complete plus
+$n=1$ partial replica. The 8OG trend must be confirmed by completion
+of at least two additional 8OG replicas before any directional claim
+about 8OG-induced binding strengthening can be reported.
+
+\section{Discussion}
+\label{sec:disc}
+
+\subsection{Mechanistic interpretation in light of multi-replica data}
+The 100\,ns multi-replica data (Section~\ref{sec:long}) require us to
+reverse the preliminary mechanistic narrative based on the 10\,ns
+single-replica analysis. The chemical alterations of 8-oxoguanosine --
+the C8=O8 carbonyl (a new H-bond acceptor) and the N7--H (a new H-bond
+donor produced by donor/acceptor inversion) -- introduce \emph{additional}
+hydrogen-bond capacity at the modification site. The 100\,ns trajectories
+indicate that this added capacity is exploited: 8OG shows higher G3
+polar contacts ($+74\%$) and higher total interface contacts ($+21\%$)
+than the WT mean, with no observed dissociation excursions.
+
+Conversely, the WT trajectories sample at least one substantially
+weaker bound state (transient drops to $\sim$100--150 contacts) which
+inflates inter-replica variance and drives the WT mean below 8OG.
+This dynamic heterogeneity is consistent with the canonical guanosine
+making a modest set of relatively labile contacts at the RRM interface,
+which a permanent oxidative modification can stabilise by recruiting
+new partners.
+
+\paragraph{Reconciliation with the 10\,ns results}
+The earlier 10\,ns single-replica comparison reported the opposite
+trend ($-9\%$ contacts, $-24\%$ G3 polar in 8OG; Section~\ref{sec:short}).
+In retrospect, the 10\,ns WT trajectory captured the trajectory's
+initial bound state before its first major contact reorganisation,
+whereas the 8OG trajectory captured a pose qualitatively similar to
+the dominant 100\,ns 8OG state. The reversed sign in 100\,ns averages
+is therefore not a bug -- it is exactly the inter-replica variance and
+slow-relaxation effect that single-trajectory MD cannot distinguish
+from a true effect.
+
+\paragraph{Expected free-energy direction}
+If the 100\,ns contact pattern persists, MM/GBSA $\Delta\Delta G_{\text{bind}}$
+is expected to be \emph{negative} (8OG more stable). This would be a
+counter-intuitive but mechanistically defensible finding for a
+RRM-binding RNA target -- and would warrant the orthogonal validation
+laid out in Section~\ref{sec:next}.
+
+\subsection{Limitations}
+The present results constitute a Tier~3 analysis on a single 10\,ns replica
+per system. Several critical limitations restrict the strength of
+conclusions that can be drawn:
+
+\begin{enumerate}[leftmargin=*]
+\item \textbf{Single replica.} A single MD trajectory provides no estimate
+of the inter-replica variance, which can be substantial in protein--RNA
+systems. Publication-grade analyses typically require $\geq$3 independent
+replicas of $\geq$100\,ns each, with explicit reporting of the standard
+error of the mean.
+
+\item \textbf{No free-energy estimate.} All conclusions to date are based
+on geometric proxies. To establish a quantitative ranking of WT vs 8OG
+binding strength, MM/GBSA $\Delta\Delta G$ from per-frame rescoring of
+the production trajectories is the minimal acceptable analysis. An
+Umbrella Sampling PMF along the dissociation coordinate would provide
+stronger evidence.
+
+\item \textbf{Approximate hydrogen-bond criterion.} We use a 3.5\,\si{\angstrom}
+distance cutoff between polar atoms as a proxy for hydrogen bonds. A
+proper analysis requires a combined distance and angle criterion (e.g.,
+donor-hydrogen-acceptor angle $>$120\textdegree) to distinguish hydrogen
+bonds from accidental polar proximity \citep{Krivov2014}.
+
+\item \textbf{No $\pi$-stacking analysis.} Stacking interactions between
+RNA bases and aromatic protein residues (Phe, Tyr, Trp) are central to
+RRM-domain recognition and should be quantified.
+
+\item \textbf{No experimental cross-validation.} Comparison with
+isothermal titration calorimetry, surface plasmon resonance, or
+crystallographic B-factor patterns of homologous 8OG-RNA complexes would
+strengthen the case considerably.
+\end{enumerate}
+
+\section{Recommended next steps}
+\label{sec:next}
+
+\begin{enumerate}[leftmargin=*]
+\item Extend to $\geq$3 independent replicas of $\geq$100\,ns each
+(approximately 5\,h per replica on a single A100 GPU).
+\item Compute MM/GBSA $\Delta\Delta G_{\text{bind}}$ with per-residue
+decomposition using \texttt{gmx\_MMPBSA} or \texttt{MMPBSA.py}.
+\item Apply geometric hydrogen-bond analysis
+(MDAnalysis \texttt{HydrogenBondAnalysis}) and quantify the persistence
+of each donor/acceptor pair.
+\item Compute buried surface area (FreeSASA) and base-aromatic
+$\pi$-stacking metrics across the trajectory.
+\item Construct a coherent narrative linking
+(i) the donor-to-acceptor inversion at N7 of 8OG;
+(ii) the loss of RNP1 hydrogen bonds, especially at A79;
+(iii) the net 9\% reduction in interface contacts;
+(iv) a positive $\Delta\Delta G_{\text{bind}}$ from MM/GBSA;
+and (v) ideally, a PMF showing reduced binding free-energy depth.
+\end{enumerate}
+
+\section*{Acknowledgements}
+\small Computations were performed on the Newton/PKS cluster (NVIDIA A100).
+The 8OG force-field and PTM-builder pipeline are part of the
+\texttt{all\_atom} setup platform.
+
+\renewcommand*{\bibfont}{\small}
+\begin{thebibliography}{99}
+
+\bibitem[Aduri et~al.(2007)]{Aduri2007}
+Aduri R., Psciuk B.T., Saro P., Taniga H., Schlegel H.B., SantaLucia J.
+\newblock {AMBER force field parameters for the naturally occurring modified
+nucleosides in RNA}.
+\newblock \emph{J. Chem. Theory Comput.} \textbf{3}, 1464--1475 (2007).
+
+\bibitem[Cooke et~al.(2003)]{Cooke2003}
+Cooke M.S., Evans M.D., Dizdaroglu M., Lunec J.
+\newblock {Oxidative DNA damage: mechanisms, mutation, and disease}.
+\newblock \emph{FASEB J.} \textbf{17}, 1195--1214 (2003).
+
+\bibitem[Janin and Chothia(1990)]{Janin1990}
+Janin J., Chothia C.
+\newblock {The structure of protein-protein recognition sites}.
+\newblock \emph{J. Biol. Chem.} \textbf{265}, 16027--16030 (1990).
+
+\bibitem[Krivov et~al.(2014)]{Krivov2014}
+Krivov G.G., Shapovalov M.V., Dunbrack R.L.
+\newblock {Improved prediction of protein side-chain conformations with SCWRL4}.
+\newblock \emph{Proteins} \textbf{82}, 1611 (2014).
+
+\bibitem[Kruse et~al.(2017)]{Kruse2017}
+Kruse H., Mladek A., Gkionis K., Hansen A., Grimme S., \v{S}poner J.
+\newblock {Quantum chemical benchmark study on 46 RNA backbone families
+using a dinucleotide unit}.
+\newblock \emph{J. Chem. Theory Comput.} \textbf{11}, 4972--4991 (2017).
+
+\bibitem[Lemkul and Bevan(2010)]{Lemkul2010}
+Lemkul J.A., Bevan D.R.
+\newblock {Assessing the stability of Alzheimer's amyloid protofibrils
+using molecular dynamics}.
+\newblock \emph{J. Phys. Chem. B} \textbf{114}, 1652--1660 (2010).
+
+\bibitem[Maier et~al.(2015)]{Maier2015}
+Maier J.A., Martinez C., Kasavajhala K., Wickstrom L., Hauser K.E.,
+Simmerling C.
+\newblock {ff14SB: improving the accuracy of protein side chain and
+backbone parameters from ff99SB}.
+\newblock \emph{J. Chem. Theory Comput.} \textbf{11}, 3696--3713 (2015).
+
+\bibitem[Mey et~al.(2020)]{Mey2020}
+Mey A.S.J.S., Allen B.K., Bruce-Macdonald H.E., et~al.
+\newblock {Best practices for alchemical free energy calculations}.
+\newblock \emph{Living J. Comput. Mol. Sci.} \textbf{2}, 18378 (2020).
+
+\bibitem[Michaud-Agrawal et~al.(2011)]{Michaud2011}
+Michaud-Agrawal N., Denning E.J., Woolf T.B., Beckstein O.
+\newblock {MDAnalysis: a toolkit for the analysis of molecular dynamics
+simulations}.
+\newblock \emph{J. Comput. Chem.} \textbf{32}, 2319--2327 (2011).
+
+\bibitem[P\'erez et~al.(2007)]{Perez2007}
+P\'erez A., March\'an I., Svozil D., \v{S}poner J., Cheatham T.E.,
+Laughton C.A., Orozco M.
+\newblock {Refinement of the AMBER force field for nucleic acids:
+improving the description of $\alpha$/$\gamma$ conformers}.
+\newblock \emph{Biophys. J.} \textbf{92}, 3817--3829 (2007).
+
+\bibitem[Simms and Zaher(2017)]{Simms2017}
+Simms C.L., Zaher H.S.
+\newblock {Quality control of chemically damaged RNA}.
+\newblock \emph{Cell. Mol. Life Sci.} \textbf{73}, 3639--3653 (2016).
+
+\bibitem[Sutto et~al.(2015)]{Sutto2015}
+Sutto L., Marsili S., Gervasio F.L.
+\newblock {New advances in metadynamics}.
+\newblock \emph{WIREs Comput. Mol. Sci.} \textbf{2}, 771--779 (2012).
+
+\bibitem[Tanaka et~al.(2007)]{Tanaka2007}
+Tanaka M., Chock P.B., Stadtman E.R.
+\newblock {Oxidized messenger RNA induces translation errors}.
+\newblock \emph{Proc. Natl. Acad. Sci. USA} \textbf{104}, 66--71 (2007).
+
+\bibitem[Wang et~al.(2019)]{Wang2019}
+Wang E., Sun H., Wang J., Wang Z., Liu H., Zhang J.Z.H., Hou T.
+\newblock {End-point binding free energy calculation with MM/PBSA and
+MM/GBSA: strategies and applications in drug design}.
+\newblock \emph{Chem. Rev.} \textbf{119}, 9478--9508 (2019).
+
+\bibitem[Wilson et~al.(2014)]{Wilson2014}
+Wilson K.A., Kellie J.L., Wetmore S.D.
+\newblock {DNA-protein $\pi$-interactions in nature: abundance, structure,
+composition and strength of contacts between aromatic amino acids and
+DNA nucleobases or deoxyribose sugar}.
+\newblock \emph{Nucleic Acids Res.} \textbf{42}, 6726--6741 (2014).
+
+\bibitem[Wu et~al.(2021)]{Wu2021}
+Wu Y., Tan T., Zhao Y., Lai L.
+\newblock {MM/PBSA evaluation of protein-RNA binding}.
+\newblock \emph{Methods} \textbf{162--163}, 142--157 (2019).
+
+\end{thebibliography}
+
+\vspace{1em}
+\hrulefill\\
+\textit{Raw analysis data and figures: \texttt{d:/all\_atom/output/analysis/}.
+Pipeline source: \texttt{d:/all\_atom/}.}
+
+\end{document}

@@ -1,0 +1,51 @@
+name: allatom
+# 服务器版本：A100 + CUDA 12.5
+# 建环境：见下方 setup_server.sh
+
+channels:
+  - conda-forge
+  - defaults
+
+dependencies:
+  - python=3.11
+
+  # MD engine
+  - openmm=8.2
+  - cuda-version=12.5
+
+  # Structure preparation
+  - pdbfixer
+  - parmed
+
+  # Trajectory analysis
+  - mdanalysis>=2.7
+  - mdtraj>=1.9
+
+  # Numerics
+  - numpy
+  - scipy
+  - pandas
+
+  # Visualization
+  - matplotlib
+  - nglview
+  - jupyterlab
+  - ipywidgets
+
+  # Remote transfer
+  - paramiko
+  - fabric
+
+  # Utilities
+  - tqdm
+  - rich
+  - pyyaml
+  - click
+
+  # Dev tools
+  - pytest
+  - black
+  - pip
+
+  - pip:
+    - flask
