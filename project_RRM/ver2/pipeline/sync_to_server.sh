@@ -31,9 +31,13 @@ if ! ssh -o BatchMode=yes -o ConnectTimeout=10 "$DEST_HOST" "true"; then
     exit 1
 fi
 
-# 2. Normalize CRLF -> LF on shell + python scripts
-echo ">>> Normalizing CRLF -> LF for *.sh and *.py under project_RRM/ver2/"
-find project_RRM/ver2/ \( -name '*.sh' -o -name '*.py' -o -name '*.template' \) -print0 \
+# 2. Normalize CRLF -> LF on shell + python + tleap scripts
+# IMPORTANT: also covers project_RRM/ver2/force_fields/modxna/ — git on
+# Windows can convert these on checkout, and modxna.sh's shebang then
+# breaks on Linux ("/bin/bash^M: bad interpreter").
+echo ">>> Normalizing CRLF -> LF (project_RRM + modxna scripts)"
+find project_RRM/ \( -name '*.sh' -o -name '*.py' -o -name '*.template' \
+                   -o -name '*.in' -o -name '*.tleap' \) -print0 \
     | while IFS= read -r -d '' f; do
         if grep -lq $'\r' "$f" 2>/dev/null; then
             sed -i 's/\r$//' "$f"

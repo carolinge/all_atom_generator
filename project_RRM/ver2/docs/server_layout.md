@@ -57,6 +57,15 @@
 └── pipeline_logs/              ← 长跑脚本的 log
 ```
 
+## Conda 环境架构（双 env）
+
+| Env | 来源 | 内容 | 用途 |
+|------|------|------|------|
+| `allatom_v2` | clone of ver_1 `allatom` | OpenMM 8.2 + ParmEd + PDBFixer + MDAnalysis + ... | OpenMM MD 跑 + 分析 |
+| `amber24` | micromamba 新建 | ambertools 24.8 + python 3.11 | tleap / cpptraj / sander |
+
+**为什么分开**：把 ambertools 装进 allatom_v2 会触发 conda 2022.10 classic solver 的 phantom `__glibc` conflict（30 分钟 solve 失败）。micromamba (libsolv) 在新 env 上 1-3 分钟完成，干净。`server_setup.sh` 自动两个都建。
+
 ## 一次性设置（首次或有更新）
 
 ```bash
@@ -67,13 +76,13 @@ bash project_RRM/ver2/pipeline/sync_to_server.sh
 ssh bio
 cd /data/biophys/carolinge/clawork/37_OXR/repo
 
-# 3) 创建 conda env + 装 AmberTools（只需一次）：
+# 3) 一次性建两个 env + 装 micromamba（约 5 分钟）：
 bash project_RRM/ver2/pipeline/server_setup.sh
 
-# 4) 组装 modXNA 修饰核苷的 .lib 文件（只需一次，跨 replica 复用）：
-conda activate allatom_v2
+# 4) 组装 modXNA 修饰核苷的 .lib 文件（一次性，跨 replica 复用）：
 bash project_RRM/ver2/pipeline/build_modxna_residues.sh
-# 检查 force_fields/lib_amber/ 下应有 9 个 .lib（3 mods × 3 variants）
+# 脚本自动 prepend amber24 PATH，不需要 activate
+# 应输出 9 个 .lib: 8OG{I,3,5}.lib  PUU{I,3,5}.lib  M1A{I,3,5}.lib
 ```
 
 ## 每个新体系（如 4BS2 + 8OG@G3）
