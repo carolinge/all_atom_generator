@@ -40,6 +40,7 @@ import tempfile
 from pathlib import Path
 
 from ptm_builder_v2 import apply_ptm, PATCHES   # local import
+from fix_pdb_for_tleap import fix_pdb            # local import
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -158,12 +159,19 @@ def main():
     # Stage 1: PDBFixer
     run_pdbfixer(input_path, args.ph, args.keep_water, cleaned_path)
 
+    # Stage 1b: tleap-friendly fixes (HIS protonation, N-term H1 naming)
+    fixed_path = out_dir / f"{args.name}_fixed.pdb"
+    fix_info = fix_pdb(cleaned_path, fixed_path)
+    print(f"[fix_pdb] HIS renames: {fix_info['n_his_renamed']}; "
+          f"N-term H->H1: {fix_info['n_h_renamed']}")
+    cleaned_path.unlink(missing_ok=True)
+
     # Stage 2: patches
-    apply_patches(cleaned_path, patches, final_path)
+    apply_patches(fixed_path, patches, final_path)
 
     # Cleanup intermediate
-    if cleaned_path != final_path:
-        cleaned_path.unlink(missing_ok=True)
+    if fixed_path != final_path:
+        fixed_path.unlink(missing_ok=True)
 
     print("")
     print(f"=== prepare_system.py DONE ===")
