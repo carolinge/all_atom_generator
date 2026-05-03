@@ -36,6 +36,7 @@ for sys_label in 4BS2_WT 4BS2_8OG_G3; do
     else
         MOD_NAME="G"
     fi
+    PRMTOP="$PROJECT/replicas_v2/$sys_label/system/${sys_label}.prmtop"
     for r in $PROJECT/replicas_v2/$sys_label/r*; do
         rep=$(basename "$r")
         traj="$r/traj.dcd"
@@ -51,7 +52,7 @@ for sys_label in 4BS2_WT 4BS2_8OG_G3; do
         echo ""
         echo ">>> Analyzing $sys_label / $rep"
         $ENV_BIN/python "$ANALYZE" \
-            --topology "$TOPO" --trajectory "$traj" \
+            --topology "$TOPO" --prmtop "$PRMTOP" --trajectory "$traj" \
             --label "$sys_label" --replica "$rep" \
             --mod-resid "$MOD_RESID" --mod-resname "$MOD_NAME" \
             --out "$RESULTS"

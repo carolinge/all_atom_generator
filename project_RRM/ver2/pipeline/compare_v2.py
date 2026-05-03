@@ -94,6 +94,41 @@ def stack_with_padding(arrs: Sequence[np.ndarray]) -> np.ndarray:
     return out
 
 
+# PBC outlier mask: occasional unwrap glitches at trajectory boundary
+# produce nonphysical jumps (RNA RMSD > 25 A for our 12-nt + protein
+# system means the molecule wrapped across the box, not biology).
+# Mask frames whose rna_rmsd or n_contacts deviate beyond physical range.
+def pbc_outlier_mask(rna_rmsd: np.ndarray, n_contacts: np.ndarray,
+                     com_dist: np.ndarray) -> np.ndarray:
+    """Return boolean mask: True = keep, False = PBC outlier."""
+    mask = np.ones_like(rna_rmsd, dtype=bool)
+    mask &= rna_rmsd  < 25.0      # 12-nt RNA can't physically RMSD > 25 A
+    mask &= n_contacts < 1500     # ~300 typical, 1500+ is wrap doublecounting
+    mask &= com_dist  < 30.0      # 12-nt + 174-aa: COM stays < 25 A normally
+    return mask
+
+
+def filter_replica_for_pbc(r: dict) -> dict:
+    """Apply PBC outlier mask to a single replica's CVs (returns shallow copy)."""
+    m = pbc_outlier_mask(r["rna_rmsd"], r["n_contacts"], r["com_dist"])
+    n_bad = int((~m).sum()); n_total = len(m)
+    if n_bad:
+        print(f"  PBC outliers in {r['rep_dir'].name}: "
+              f"{n_bad}/{n_total} ({100*n_bad/n_total:.2f}%) frames masked")
+    out = dict(r)
+    for k in ("times_ps", "prot_rmsd", "rna_rmsd", "n_contacts",
+              "com_dist", "g3_contacts", "g3_hbonds"):
+        a = r[k].astype(float).copy()
+        a[~m] = np.nan
+        out[k] = a
+    # chi/pucker arrays (n_frames, n_residues): mask whole rows
+    out["chi_arr"]    = r["chi_arr"].copy().astype(float)
+    out["pucker_arr"] = r["pucker_arr"].copy().astype(float)
+    out["chi_arr"][~m, :]    = np.nan
+    out["pucker_arr"][~m, :] = np.nan
+    return out
+
+
 def mean_sem_n(stack: np.ndarray) -> tuple:
     """Returns (mean, sem, n_avail) ignoring NaN per column."""
     n_avail = np.sum(~np.isnan(stack), axis=0)
@@ -309,14 +344,15 @@ def main():
     out_root.mkdir(parents=True, exist_ok=True)
     fig_dir = out_root / "figures"; fig_dir.mkdir(exist_ok=True)
 
-    # Load all replicas
+    # Load all replicas + apply PBC outlier filter
     all_data: dict = {}
     for lab, paths in systems.items():
         all_data[lab] = []
         for p in paths:
             r = load_replica(args.in_root, p)
-            all_data[lab].append(r)
             print(f"loaded {lab} / {p}")
+            r = filter_replica_for_pbc(r)
+            all_data[lab].append(r)
 
     # ── Aggregate time series ──────────────────────────────────────────────
     ts_keys = ["prot_rmsd", "rna_rmsd", "n_contacts", "com_dist",

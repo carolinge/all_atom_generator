@@ -129,37 +129,91 @@ def run_analysis(topology: Path, trajectory: Path,
                  out_root: Path, stride: int = 1,
                  contact_cutoff: float = 4.0,
                  hbond_dist_cutoff: float = 3.5,
-                 hbond_angle_cutoff: float = 120.0):
+                 hbond_angle_cutoff: float = 120.0,
+                 prmtop: Path | None = None):
     import MDAnalysis as mda
     from MDAnalysis.analysis import align, rms
     from MDAnalysis.analysis.distances import distance_array
+    from MDAnalysis import transformations as trans
 
     out_dir = out_root / label / replica
     out_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"\n=== {label} / {replica} ===")
     print(f"Topology  : {topology}")
+    if prmtop:
+        print(f"Prmtop    : {prmtop}  (preferred — has bond connectivity)")
     print(f"Trajectory: {trajectory}")
     print(f"Modified  : resid {mod_resid} ({mod_resname}) on chain B")
-    u = mda.Universe(str(topology), str(trajectory))
+    # Prefer prmtop for topology (gives proper bonds for unwrap),
+    # fall back to PDB.
+    if prmtop and Path(prmtop).exists():
+        u = mda.Universe(str(prmtop), str(trajectory),
+                         topology_format="PRMTOP", format="DCD")
+    else:
+        u = mda.Universe(str(topology), str(trajectory))
     n_frames = len(u.trajectory) // stride
     print(f"Frames    : {len(u.trajectory)} (stride {stride} -> {n_frames} analysed)")
 
     # ── Selections ─────────────────────────────────────────────────────────
-    # Try `segid A/B` first (AMBER/PRMTOP convention); fall back to chainID.
-    def sel(s):
-        ag = u.select_atoms(s)
-        return ag if len(ag) else None
+    # MDAnalysis's built-in `nucleic` selector misses our modxna residues
+    # (OGI/PUU/MAI etc.). Build an inclusive RNA selector that covers
+    # standard RNA + 5'/3' caps + modxna naming + standard PDB-CCD names.
+    RNA_RESNAMES = (
+        # standard internal + caps from amber14/RNA.OL3
+        "A C G U RA RC RG RU "
+        "A5 A3 C5 C3 G5 G3 U5 U3 "
+        # modxna outputs (8OG, PUU, M1A all 3-char internal + capped)
+        "OGI OG3 OG5 8OG "
+        "PUU PUI PU3 PU5 PSU "
+        "MAI MA3 MA5 M1A "
+        # modrna08 codes
+        "1MA 6MA 7MG 5MU 5MC 2MG 1MG"
+    )
 
-    prot = (sel("segid A and not name H*") or sel("chainID A and not name H*")
-            or sel("protein and not name H*"))
-    rna  = (sel("segid B and not name H*") or sel("chainID B and not name H*")
-            or sel("nucleic and not name H*"))
+    def sel(s):
+        try:
+            ag = u.select_atoms(s)
+            return ag if len(ag) else None
+        except (AttributeError, Exception):
+            return None
+
+    # Prefer the PRMTOP-friendly `protein` selector; fall back to chain
+    # attributes only if a PDB topology is loaded.
+    prot = (sel("protein and not name H*")
+            or sel("segid A and not name H*")
+            or sel("chainID A and not name H*"))
+    rna  = (sel(f"resname {RNA_RESNAMES} and not name H*"))
+    if rna is None or not len(rna):
+        # Fallback: anything not protein, not water, not ion
+        rna = u.select_atoms(
+            "not protein and not resname WAT HOH SOL TIP3 TIP3P "
+            "Na+ Cl- K+ Mg+ Ca+ Zn+ NA CL K MG CA ZN "
+            "and not name H*")
     if prot is None or rna is None or len(prot) == 0 or len(rna) == 0:
         sys.exit(f"ERROR: empty protein or RNA selection in {topology}")
     prot_ca = u.select_atoms("protein and name CA")
     print(f"  Protein heavy: {len(prot)}  CA: {len(prot_ca)}")
     print(f"  RNA heavy:     {len(rna)}")
+
+    # ── On-the-fly PBC unwrap + center on protein ──────────────────────────
+    # Without unwrap, RNA partially dissociating across the periodic
+    # box edge produces RMSD/contact spikes that are pure artefact.
+    # Sequence: (1) unwrap protein+RNA (so each molecule is whole),
+    # (2) center protein in box (so we can compare frames cleanly),
+    # (3) wrap solvent back so the box stays sane visually.
+    complex_atoms = prot + rna
+    if hasattr(u.atoms, "bonds") and len(u.atoms.bonds) > 0:
+        try:
+            u.trajectory.add_transformations(
+                trans.unwrap(complex_atoms),
+                trans.center_in_box(prot, wrap=True),
+            )
+            print("  PBC: unwrap(protein+RNA) + center_in_box(protein) ON")
+        except Exception as exc:
+            print(f"  PBC: unwrap unavailable ({exc}); falling back to min-image")
+    else:
+        print("  PBC: no bond info -> min-image only (load prmtop for unwrap)")
 
     # Modified residue groups
     sel_mod_all  = u.select_atoms(f"resid {mod_resid} and not name H*") & rna
@@ -346,12 +400,13 @@ def run_analysis(topology: Path, trajectory: Path,
 
     # ── Summary JSON (scalars + convergence flags) ─────────────────────────
     def equil_flag(arr):
-        """True if first-half mean within 2*SEM of second-half mean."""
+        """True if first-half mean within 2*SEM of second-half mean.
+        Returns plain Python bool (JSON-serialisable)."""
         n = len(arr)
         if n < 100: return None
         a = arr[: n // 2]; b = arr[n // 2:]
         sem = (np.std(a, ddof=1) + np.std(b, ddof=1)) / np.sqrt(min(len(a), len(b)))
-        return abs(a.mean() - b.mean()) < 2 * sem
+        return bool(abs(float(a.mean()) - float(b.mean())) < 2 * float(sem))
 
     summary = {
         "system":  label,
@@ -400,9 +455,8 @@ def run_analysis(topology: Path, trajectory: Path,
 # ── Selection helpers ───────────────────────────────────────────────────────
 
 def _residue_name_at(u, resid):
-    sel = u.select_atoms(f"resid {resid} and (segid B or chainID B or nucleic)")
-    if not len(sel):
-        sel = u.select_atoms(f"resid {resid}")
+    """Look up residue name by resid alone (works for any non-water residue)."""
+    sel = u.select_atoms(f"resid {resid}")
     if not len(sel):
         return None
     return sel.residues[0].resname.strip()
@@ -415,14 +469,11 @@ def _chi_atoms(u, resid, resname):
         return None
     resname = resname.upper()
 
-    # Determine glycosidic atom + second atom for chi
-    # Standard purines (A, G, A5, G5, A3, G3, RA, RG, ...) and modxna purines
-    # (8OG / M1A): chi = O4'-C1'-N9-C4
     purines  = {"A","G","A5","A3","G5","G3","RA","RG","OGI","8OG","8OG3","8OG5",
                 "M1A","M1A3","M1A5","MAI","MA3","MA5","1MA","6MA","ADE","GUA",
-                "OG3","OG5","OGI"}
+                "OG3","OG5"}
     pyrim    = {"U","C","U5","U3","C5","C3","RU","RC","URA","CYT"}
-    psi_like = {"PUU","PSU","PUI","PU3","PU5","PSU3","PSU5"}  # C-glycosidic at C5
+    psi_like = {"PUU","PSU","PUI","PU3","PU5","PSU3","PSU5"}  # C-glycosidic
 
     if resname in purines:
         atom_names = ["O4'", "C1'", "N9", "C4"]
@@ -433,12 +484,12 @@ def _chi_atoms(u, resid, resname):
     else:
         return None
 
-    sel = u.select_atoms(
-        f"resid {resid} and (segid B or chainID B or nucleic) and ("
-        + " or ".join(f"name {n}" for n in atom_names) + ")")
+    # Look up by resid alone (no chain/nucleic restriction — that misses
+    # modxna names like OGI).
+    sel = u.select_atoms(f"resid {resid} and (" +
+                         " or ".join(f"name {n}" for n in atom_names) + ")")
     if len(sel) != 4:
         return None
-    # Order by atom_names order
     by_name = {a.name.strip(): a for a in sel}
     try:
         return [by_name[n] for n in atom_names]
@@ -449,9 +500,8 @@ def _chi_atoms(u, resid, resname):
 def _pucker_atoms(u, resid):
     """Return [C1', C2', C3', C4', O4'] for pseudorotation. None if missing."""
     names = ["C1'", "C2'", "C3'", "C4'", "O4'"]
-    sel = u.select_atoms(
-        f"resid {resid} and (segid B or chainID B or nucleic) and ("
-        + " or ".join(f"name {n}" for n in names) + ")")
+    sel = u.select_atoms(f"resid {resid} and (" +
+                         " or ".join(f"name {n}" for n in names) + ")")
     if len(sel) != 5:
         return None
     by_name = {a.name.strip(): a for a in sel}
@@ -502,7 +552,10 @@ def _count_hbonds(donor_acceptor_group, partner_polar_group,
 
 def parse_args():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--topology",   required=True, type=Path)
+    ap.add_argument("--topology",   required=True, type=Path,
+                    help="solvated.pdb (used as fallback if prmtop missing)")
+    ap.add_argument("--prmtop",     required=False, type=Path, default=None,
+                    help="AMBER prmtop (preferred — gives bonds for unwrap)")
     ap.add_argument("--trajectory", required=True, type=Path)
     ap.add_argument("--label",      required=True,
                     help="system label, e.g. 4BS2_8OG_G3")
@@ -526,6 +579,7 @@ def main():
         sys.exit(f"ERROR: {args.trajectory} not found")
     run_analysis(
         topology=args.topology, trajectory=args.trajectory,
+        prmtop=args.prmtop,
         label=args.label, replica=args.replica,
         mod_resid=args.mod_resid, mod_resname=args.mod_resname,
         out_root=args.out, stride=args.stride,
