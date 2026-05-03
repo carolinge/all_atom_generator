@@ -48,9 +48,10 @@ if [ -z "$NAME" ]; then
 fi
 
 case "$GPU" in
-    a100)  TEMPLATE="$PIPELINE/sub.sh.template" ;;
-    h200)  TEMPLATE="$PIPELINE/sub_h200.sh.template" ;;
-    *)     echo "Unknown --gpu $GPU (use a100 or h200)"; exit 1 ;;
+    a100)      TEMPLATE="$PIPELINE/sub.sh.template" ;;
+    h200)      TEMPLATE="$PIPELINE/sub_h200.sh.template" ;;
+    h200-1us)  TEMPLATE="$PIPELINE/sub_h200_1us.sh.template" ;;
+    *)         echo "Unknown --gpu $GPU (use a100|h200|h200-1us)"; exit 1 ;;
 esac
 
 SYSDIR="$PROJECT/replicas_v2/$NAME/system"

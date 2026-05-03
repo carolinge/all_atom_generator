@@ -56,14 +56,18 @@ else:
 print(f"[setup] replica seed = {SEED}")
 
 # ── Run protocol parameters ──────────────────────────────────────────────
+# Override production length via env var MD_NS (default 100 ns).
+import os as _os
 TEMP            = 300 * unit.kelvin
 PRESSURE        = 1 * unit.atmosphere
 DT              = 4 * unit.femtoseconds
 NVT_STEPS       = 25_000        # 100 ps
 NPT_STEPS       = 25_000        # 100 ps
-PROD_STEPS      = 25_000_000    # 100 ns
+_MD_NS          = float(_os.environ.get("MD_NS", "100"))
+PROD_STEPS      = int(_MD_NS * 250_000)   # ns -> steps @ 4 fs
 REPORT_INTERVAL = 5_000         # 20 ps
 CKPT_INTERVAL   = 500_000       # 2 ns
+print(f"[setup] production length: {_MD_NS:g} ns ({PROD_STEPS:,} steps)")
 
 # ── Output paths ─────────────────────────────────────────────────────────
 TRAJ_DCD   = HERE / "traj.dcd"

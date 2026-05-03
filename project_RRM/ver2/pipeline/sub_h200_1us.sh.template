@@ -1,0 +1,21 @@
+#!/bin/bash
+#SBATCH --time=72:00:00
+#SBATCH --ntasks=1
+#SBATCH --partition=graphic
+#SBATCH --constraint="gpu&h200"
+#SBATCH --gres=gpu:h200:1
+#SBATCH --cpus-per-task=10
+#SBATCH --mem=225000
+#SBATCH --mail-type=END
+#SBATCH --job-name="__JOBNAME__"
+#SBATCH --output=./%j.out
+#SBATCH --error=./%j.err
+
+set -e
+module purge
+module load cuda/12.5
+source "$(conda info --base)/etc/profile.d/conda.sh"
+conda activate allatom_v2
+
+export MD_NS=1000   # 1 microsecond
+python ./run_md.py
