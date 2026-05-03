@@ -31,9 +31,12 @@ from openmm.app import (AmberInpcrdFile, AmberPrmtopFile, CheckpointReporter,
 HERE = Path(__file__).parent
 SYSTEM_DIR = HERE.parent / "system"   # replicas_v2/<name>/system/
 
-# Locate the prmtop/inpcrd (single pair per system)
-prmtop_files = sorted(SYSTEM_DIR.glob("*.prmtop"))
-inpcrd_files = sorted(SYSTEM_DIR.glob("*.inpcrd"))
+# Locate the prmtop/inpcrd (single solvated pair per system).
+# Skip *.dry.prmtop (unsolvated diagnostic from build_free_rna.sh).
+prmtop_files = sorted(p for p in SYSTEM_DIR.glob("*.prmtop")
+                       if not p.name.endswith(".dry.prmtop"))
+inpcrd_files = sorted(p for p in SYSTEM_DIR.glob("*.inpcrd")
+                       if not p.name.endswith(".dry.inpcrd"))
 if not prmtop_files or not inpcrd_files:
     sys.exit(f"ERROR: no prmtop/inpcrd in {SYSTEM_DIR}. "
              f"Run build_amber_system.sh first.")
